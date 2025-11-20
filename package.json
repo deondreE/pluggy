@@ -1,16 +1,23 @@
 {
-  "name": "pluggy",
+  "name": "pluggy-view",
   "module": "index.ts",
+  "version": "0.0.1",
   "type": "module",
-  "private": true,
+  "private": false,
   "scripts": {
     "dev": "vite",
     "test": "vitest",
-    "test:watch": "vitest watch"
+    "test:watch": "vitest watch",
+    "lint": "oxlint 'src/**/*.{js,ts,tsx,pluggy}'",
+    "lint:fix": "oxlint --fix 'src/**/*.{js,ts,tsx,pluggy}'",
+    "fmt": "oxfmt format .",
+    "fmt:check": "oxfmt check ."
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^24.10.1",
+    "oxfmt": "^0.14.0",
+    "oxlint": "^1.29.0",
     "vite": "^7.2.2",
     "vitest": "^4.0.10"
   },
