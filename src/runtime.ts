@@ -95,14 +95,40 @@ export function mountApp(app: () => HTMLElement, root: HTMLElement): void {
 
 export function rerender(): void {
   if (!currentRender || !currentRoot) return;
-  currentRoot.textContent = "";
-  currentRoot.append(currentRender());
+  const newTree = currentRender();
+  shallowReplace(currentRoot.firstChild!, newTree);
 }
 
 export function createSignal<T>(initial: T): Signal<T> {
-  const s = signal(initial);
-  s.subscribe(() => rerender());
-  return s;
+  // const s = signal(initial);
+  // s.subscribe(() => rerender());
+  // return s;
+  return signal(initial);
+}
+
+function shallowReplace(oldNode: Node, newNode: Node) {
+  if (
+    oldNode.nodeType !== newNode.nodeType ||
+    oldNode.nodeName !== newNode.nodeName
+  ) {
+    oldNode.replaceWith(newNode);
+    return;
+  }
+  if (oldNode instanceof Text && newNode instanceof Text) {
+    if (oldNode.nodeValue !== newNode.nodeValue)
+      oldNode.nodeValue = newNode.nodeValue;
+    return;
+  }
+  const oldChildren = Array.from(oldNode.childNodes);
+  const newChildren = Array.from(newNode.childNodes);
+  const len = Math.max(oldChildren.length, newChildren.length);
+  for (let i = 0; i < len; i++) {
+    const oldChild = oldChildren[i];
+    const newChild = newChildren[i];
+    if (!oldChild) oldNode.appendChild(newChild!);
+    else if (!newChild) oldChild.remove();
+    else shallowReplace(oldChild, newChild);
+  }
 }
 
 export function bindText(sig: Signal<any>): Text {
