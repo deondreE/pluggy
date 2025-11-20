@@ -1,0 +1,12 @@
+
+
+export function App() {
+    const msg = "Pluggy is working";
+    return (
+        <div class="map"> 
+            <h1>{msg}</h1>
+            <p>Custom syntax rendering successful.</p>
+            <p>hi brad</p>
+        </div>
+    );
+}
