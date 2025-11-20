@@ -18,6 +18,9 @@ export function parse(tokens: Token[]): Node[] {
 
   return parseNodes();
 
+  // ----------------------------------------------------
+  // Recursive‑descent helpers
+  // ----------------------------------------------------
   function parseNodes(stopTag?: string): Node[] {
     const nodes: Node[] = [];
     while (true) {
@@ -26,7 +29,7 @@ export function parse(tokens: Token[]): Node[] {
       if (t.type === "eof") break;
       if (t.type === "tagClose") {
         eat();
-        if (t.name === stopTag) break;
+        if (t.name === stopTag) break; // </tag>
         continue;
       }
       if (t.type === "tagOpen") {
@@ -42,11 +45,14 @@ export function parse(tokens: Token[]): Node[] {
         nodes.push(parseExpr());
         continue;
       }
-      eat(); // safety
+      eat(); // safety: skip unexpected token
     }
     return nodes;
   }
 
+  // ----------------------------------------------------
+  // { ... } expressions
+  // ----------------------------------------------------
   function parseExpr(): Node {
     let code = "";
     while (true) {
@@ -59,10 +65,51 @@ export function parse(tokens: Token[]): Node[] {
     return { type: "Expression", code: code.trim() };
   }
 
+  // ----------------------------------------------------
+  // <tag ...attrs> ... </tag>
+  // ----------------------------------------------------
   function parseElement(): Node {
     const open = eat(); // tagOpen
     const tag = (open as any).name;
     const attrs: Record<string, string | null> = {};
+
+    // --- collect attributes until something else (child, closing, etc.) ---
+    while (true) {
+      const t = peek();
+      if (!t) break;
+      if (t.type === "attrName") {
+        const name = (eat() as any).name;
+        let val: string | null = null;
+
+        // possible attrValue, exprOpen + attrValue, or bare attr
+        if (peek()?.type === "attrValue") {
+          val = (eat() as any).value;
+        } else if (peek()?.type === "exprOpen") {
+          eat(); // {
+          if (peek()?.type === "attrValue") {
+            val = (eat() as any).value;
+          }
+          if (peek()?.type === "exprClose") eat(); // }
+        }
+
+        attrs[name] = val;
+        continue;
+      }
+      // stop attributes when encountering child content / >
+      if (
+        t.type === "text" ||
+        t.type === "tagOpen" ||
+        t.type === "exprOpen" ||
+        t.type === "tagClose"
+      ) {
+        break;
+      }
+      // consume any stray token (e.g., whitespace)
+      if (t.type === "eof") break;
+      eat();
+    }
+
+    // parse children until closing tag
     const children = parseNodes(tag);
     return { type: "Element", tag, attrs, children };
   }

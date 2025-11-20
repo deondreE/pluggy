@@ -1,12 +1,21 @@
+import { h, signal, bindText, mountApp } from "./runtime";
 
+const count = signal(0);
 
-export function App() {
-    const msg = "Pluggy is working";
-    return (
-        <div class="map"> 
-            <h1>{msg}</h1>
-            <p>Custom syntax rendering successful.</p>
-            <p>hi brad</p>
-        </div>
-    );
+export function Counter() {
+  const inc = () => count.set(count.get() + 1);
+  const dec = () => count.set(count.get() - 1);
+
+  return (
+    <div class="counter">
+      <h1>Count: </h1>
+      {bindText(count)}
+      <div>
+        <button on:click={dec}>–</button>
+        <button on:click={inc}>+</button>
+      </div>
+    </div>
+  );
 }
+
+export default Counter;

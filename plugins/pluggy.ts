@@ -33,15 +33,16 @@ export default function pluggy(): Plugin {
 
       console.error(jsExpr);
 
-      const code = `import { h, mount } from "/src/runtime.ts";
-     
+      const code = `
+
         ${jsExpr}
         }
-     
+
      if (typeof document !== "undefined") {
        const el = document.getElementById("app");
-       if (el) mount(App(), el);
+       if (el) mountApp(Counter, el);
      }
+     export default Counter;
      `;
 
       return { code, map: null };
