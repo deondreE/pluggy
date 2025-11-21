@@ -40,9 +40,9 @@ export default function pluggy(): Plugin {
 
      if (typeof document !== "undefined") {
        const el = document.getElementById("app");
-       if (el) mountApp(Counter, el);
+       if (el) mountApp(App, el);
      }
-     export default Counter;
+
      `;
 
       return { code, map: null };

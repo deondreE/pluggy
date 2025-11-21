@@ -1,21 +1,19 @@
-import { h, signal, bindText, mountApp } from "./runtime";
+import { h, signal, mountApp } from "./runtime";
 
-const count = signal(0);
+export function App() {
+  const disabled = signal(false);
 
-export function Counter() {
-  const inc = () => count.set(count.get() + 1);
-  const dec = () => count.set(count.get() - 1);
+  const toggle = () => {
+    disabled.set(!disabled());
+    console.log("disabled:", disabled());
+  };
 
   return (
     <div class="counter">
-      <h1>Count: </h1>
-      {bindText(count)}
-      <div>
-        <button on:click={dec}>–</button>
-        <button on:click={inc}>+</button>
-      </div>
+      <button disabled={disabled}>Click Me</button>
+      <button onClick={toggle}>
+        Toggle (current {disabled})
+      </button>
     </div>
   );
 }
-
-export default Counter;

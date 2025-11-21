@@ -34,31 +34,38 @@ export function generate(nodes: Node[]): string {
     }
   }
 
-  // ----------------------------------------------------
-  // Build props: keep on:* handler references intact
-  // ----------------------------------------------------
   function buildProps(attrs: Record<string, string | null>): string {
     const pairs: string[] = [];
 
-    for (const [key, val] of Object.entries(attrs)) {
-      if (val == null || val === "") {
-        pairs.push(`"${key}":true`);
+    for (const [key, raw] of Object.entries(attrs)) {
+      const val = raw ?? null;
+
+      if (val === null || val === "") {
+        pairs.push(`"${key}":null`);
         continue;
       }
 
-      // on:* → function reference
-      if (key.startsWith("on:")) {
-        const expr = /^\{.*\}$/.test(val) ? val.slice(1, -1).trim() : val;
-        pairs.push(`"${key}":${expr}`);
+      if (key === "class" || key === "id") {
+        pairs.push(`"${key}":${JSON.stringify(val)}`);
         continue;
       }
 
-      // other attributes
+      if (key.startsWith("on") || key.startsWith("on:")) {
+        pairs.push(`"${key}":${val}`);
+        continue;
+      }
+
       if (/^\{.*\}$/.test(val)) {
         pairs.push(`"${key}":(${val.slice(1, -1).trim()})`);
-      } else {
-        pairs.push(`"${key}":${JSON.stringify(val)}`);
+        continue;
       }
+
+      if (/^[a-zA-Z_$][\w.$]*$/.test(val)) {
+        pairs.push(`"${key}":${val}`);
+        continue;
+      }
+
+      pairs.push(`"${key}":${JSON.stringify(val)}`);
     }
 
     return `{${pairs.join(",")}}`;

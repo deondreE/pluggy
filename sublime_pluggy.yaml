@@ -1,0 +1,50 @@
+%YAML 1.2
+---
+name: Pluggy
+file_extensions: [pluggy]
+scope: source.pluggy
+contexts:
+  main:
+    - include: scope:source.js
+
+    # --- Pluggy JSX / custom event syntax ---
+    - match: "(on:)([a-zA-Z_][a-zA-Z0-9_-]*)"
+      captures:
+        1: keyword.operator.event.pluggy
+        2: entity.name.function.event.pluggy
+      scope: meta.attribute.event.pluggy
+
+    # signal(...) / bindText(...)
+    - match: '\b(signal|bindText|mountApp|h)\b'
+      scope: support.function.pluggy
+
+    # Pluggy reactive braces {count}
+    - match: "{"
+      scope: punctuation.section.embedded.begin.pluggy
+      push:
+        - meta_scope: source.js.embedded.expression.pluggy
+        - match: "}"
+          scope: punctuation.section.embedded.end.pluggy
+          pop: true
+
+  # Strings
+  string_double:
+    - match: '"'
+      scope: punctuation.definition.string.begin.pluggy
+      push:
+        - meta_scope: string.quoted.double.pluggy
+        - match: '\\.'
+          scope: constant.character.escape.pluggy
+        - match: '"'
+          scope: punctuation.definition.string.end.pluggy
+          pop: true
+  string_single:
+    - match: "'"
+      scope: punctuation.definition.string.begin.pluggy
+      push:
+        - meta_scope: string.quoted.single.pluggy
+        - match: '\\.'
+          scope: constant.character.escape.pluggy
+        - match: "'"
+          scope: punctuation.definition.string.end.pluggy
+          pop: true

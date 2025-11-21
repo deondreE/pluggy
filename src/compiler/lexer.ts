@@ -15,7 +15,7 @@ export function tokenize(src: string): Token[] {
 
   const peek = (n = 0) => src[i + n];
   const eat = (n = 1) => (i += n);
-  const readWhile = (re: RegExp) => {
+  const readWhile = (re: RegExp): string => {
     const start = i;
     while (i < len && re.test(src[i])) i++;
     return src.slice(start, i);
@@ -24,25 +24,23 @@ export function tokenize(src: string): Token[] {
   while (i < len) {
     const ch = peek();
 
-    // --------------- Tag open / close ---------------
-    if (ch === "<") {
-      if (peek(1) === "/") {
-        // closing tag
-        eat(2);
-        const name = readWhile(/[A-Za-z0-9:_-]/);
-        if (peek() === ">") eat();
-        tokens.push({ type: "tagClose", name });
-        continue;
-      }
+    /* ---------- closing tag </x> ---------- */
+    if (ch === "<" && peek(1) === "/") {
+      eat(2);
+      const name = readWhile(/[A-Za-z0-9:_-]/);
+      if (peek() === ">") eat();
+      tokens.push({ type: "tagClose", name });
+      continue;
+    }
 
-      // opening tag
-      eat(); // skip <
+    /* ---------- opening tag <x ...> ---------- */
+    if (ch === "<") {
+      eat();
       const tagName = readWhile(/[A-Za-z0-9:_-]/);
       tokens.push({ type: "tagOpen", name: tagName });
 
-      // --- attributes
+      // --- attributes ---
       while (i < len && peek() !== ">" && peek() !== "/") {
-        // ignore whitespace between attributes
         if (/\s/.test(peek())) {
           eat();
           continue;
@@ -55,11 +53,11 @@ export function tokenize(src: string): Token[] {
         }
         tokens.push({ type: "attrName", name: attrName });
 
-        // attribute value
+        // optional value
         if (peek() === "=") {
           eat();
 
-          // quoted value
+          // quoted
           if (peek() === '"' || peek() === "'") {
             const quote = peek();
             eat();
@@ -69,12 +67,14 @@ export function tokenize(src: string): Token[] {
             continue;
           }
 
-          // value in braces {expression}
+          // braced expression
           if (peek() === "{") {
             tokens.push({ type: "exprOpen" });
             eat();
-            const expr = readWhile(/[^}]/);
-            tokens.push({ type: "attrValue", value: expr.trim() });
+            const start = i;
+            while (i < len && peek() !== "}") eat();
+            const exprValue = src.slice(start, i).trim();
+            tokens.push({ type: "attrValue", value: exprValue });
             if (peek() === "}") {
               tokens.push({ type: "exprClose" });
               eat();
@@ -82,19 +82,27 @@ export function tokenize(src: string): Token[] {
             continue;
           }
 
-          // bareword value until space or >
+          // bare value up to space or >
           const value = readWhile(/[^\s>]/);
           tokens.push({ type: "attrValue", value });
           continue;
         }
+        // no '=' → bare attr (disabled) → nothing pushed
       }
 
-      // finish tag if >
+      // self-closing
+      if (peek() === "/") {
+        eat();
+        if (peek() === ">") eat();
+        tokens.push({ type: "tagClose", name: tagName });
+        continue;
+      }
+
       if (peek() === ">") eat();
       continue;
     }
 
-    // --------------- Expressions ---------------
+    /* ---------- expression delimiters ---------- */
     if (ch === "{") {
       tokens.push({ type: "exprOpen" });
       eat();
@@ -106,14 +114,15 @@ export function tokenize(src: string): Token[] {
       continue;
     }
 
-    // --------------- Text ---------------
-    const text = readWhile(/[^<{}/]/);
+    /* ---------- plain text ---------- */
+    const text = readWhile(/[^<>{}]/);
     if (text) {
       tokens.push({ type: "text", value: text });
-    } else {
-      // safety to advance when no match
-      eat();
+      continue;
     }
+
+    // safety
+    eat();
   }
 
   tokens.push({ type: "eof" });
