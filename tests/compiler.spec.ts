@@ -266,4 +266,18 @@ describe("integration end‑to‑end", () => {
     const code = compile(src);
     expect(code).toBe('[h("p", {}, "A"), h("p", {}, "B")]');
   });
+
+  it("renders multi‑root templates as arrays", () => {
+    const src = `<p>A</p><p>B</p>`;
+    const code = compile(src);
+    expect(code).toBe('[h("p", {}, "A"), h("p", {}, "B")]');
+  });
+
+  it("compiles each() loop expressions", () => {
+    const src = `<ul>{each(todos, (item, i) => <li>{i}: {item}</li>)}</ul>`;
+    const code = compile(src);
+    expect(code).toBe(
+      'h("ul", {}, (each(todos, (item, i) => h("li", {}, (i), ": ", (item)))))',
+    );
+  });
 });

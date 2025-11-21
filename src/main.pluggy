@@ -1,19 +1,93 @@
-import { h, signal, mountApp } from "./runtime";
+import {
+  h,
+  signal,
+  mountApp,
+  effect,
+  store,
+  computed,
+  batch,
+  resource,
+} from './runtime';
 
 export function App() {
   const disabled = signal(false);
 
+  const a = signal(0);
+  const b = signal(0);
+  const content = signal('');
+  const sum = computed(() => a() + b());
+  const count = signal(0);
+  const doubled = computed(() => count() * 2);
+
+  const data = resource(() =>
+    fetch('https://pokeapi.co/api/v2/pokemon/ditto').then((r) => r.text()),
+  );
+
   const toggle = () => {
     disabled.set(!disabled());
-    console.log("disabled:", disabled());
+    console.log('disabled:', disabled());
+  };
+
+  const inc = () => count.set(count() + 1);
+
+  effect(() => console.log('Sum changed →', sum()));
+
+  const onInputChange = (e) => content.set(e.target.value);
+
+  const incBothUnbatched = () => {
+    a.set(a() + 1);
+    b.set(b() + 1);
+  };
+
+  const incBothBatched = () =>
+    batch(() => {
+      a.set(a() + 1);
+      b.set(b() + 1);
+    });
+
+  const toggleDisabled = () => {
+    disabled.set(!disabled());
+    console.log('Disabled:', disabled());
   };
 
   return (
-    <div class="counter">
-      <button disabled={disabled}>Click Me</button>
-      <button onClick={toggle}>
-        Toggle (current {disabled})
-      </button>
+    <div class="app" style="font-family:sans-serif; padding:1rem;">
+      <h1 style="margin-bottom:0.5rem;">Pluggy Demo</h1>
+      <section style="margin-bottom:1.5rem;">
+        <button disabled={disabled}>Click Me</button>
+        <button onClick={toggleDisabled}>
+          Toggle (current {String(disabled())})
+        </button>
+        <button onClick={inc}>+ Count</button>
+
+        <h2>
+          Count: {count} -- Doubled: {doubled}
+        </h2>
+      </section>
+
+      <section style="margin-bottom:1.5rem;">
+        <input
+          onInput={onInputChange}
+          placeholder="Type something..."
+          style="padding:0.25rem 0.5rem;"
+        />
+        <h3>You typed: {content}</h3>
+      </section>
+
+      <section style="margin-bottom:1.5rem;">
+        <h2>
+          a: {a}, b: {b}, sum: {sum}
+        </h2>
+        <div style="display:flex; gap:1rem; justify-content:center;">
+          <button onClick={incBothUnbatched}>Increment (unbatched)</button>
+          <button onClick={incBothBatched}>Increment (batched)</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Pokémon Resource</h2>
+        <p>{data}</p>
+      </section>
     </div>
   );
 }
