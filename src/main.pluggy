@@ -1,12 +1,14 @@
 import {
-  h,
   signal,
-  mountApp,
   effect,
+  h,
   store,
   computed,
   batch,
+  each,
   resource,
+  mountApp,
+  transition,
 } from './runtime';
 
 export function App() {
@@ -18,6 +20,8 @@ export function App() {
   const sum = computed(() => a() + b());
   const count = signal(0);
   const doubled = computed(() => count() * 2);
+
+  const visible = signal(true);
 
   const data = resource(() =>
     fetch('https://pokeapi.co/api/v2/pokemon/ditto').then((r) => r.text()),
@@ -50,6 +54,23 @@ export function App() {
     console.log('Disabled:', disabled());
   };
 
+  const toggle1 = () => {
+    visible.set(!visible());
+  };
+
+  const todos = signal([
+    { id: 1, text: 'Buy groceries' },
+    { id: 2, text: 'Work out' },
+  ]);
+  const todoCount = computed(() => todos().length);
+  const addTodo = () => {
+    const next = [...todos(), { id: Date.now(), text: `Task ${count() + 1}` }];
+    todos.set(next);
+  };
+  const removeTodo = (id) => {
+    todos.set(todos().filter((t) => t.id !== id));
+  };
+
   return (
     <div class="app" style="font-family:sans-serif; padding:1rem;">
       <h1 style="margin-bottom:0.5rem;">Pluggy Demo</h1>
@@ -59,7 +80,6 @@ export function App() {
           Toggle (current {String(disabled())})
         </button>
         <button onClick={inc}>+ Count</button>
-
         <h2>
           Count: {count} -- Doubled: {doubled}
         </h2>
@@ -88,6 +108,25 @@ export function App() {
         <h2>Pokémon Resource</h2>
         <p>{data}</p>
       </section>
+
+      <div style="font-family:sans-serif; padding:1rem;">
+        <h1>Todo List ({todoCount})</h1>
+        <button onClick={addTodo}>+ Add Todo</button>
+
+        <ul style="margin-top:1rem;">
+          {each(todos, (item) => (
+            <li key={item.id}>
+              {item.text}
+              <button
+                onClick={() => removeTodo(item.id)}
+                style="margin-left:0.5rem;"
+              >
+                🗑
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

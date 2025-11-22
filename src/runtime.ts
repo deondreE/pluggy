@@ -19,32 +19,32 @@ export function h(
 
   if (props) {
     for (const [k, v] of Object.entries(props)) {
-      if (k.startsWith('on:')) {
+      if (k.startsWith("on:")) {
         const ev = k.slice(3);
-        if (typeof v === 'function') el.addEventListener(ev, v);
+        if (typeof v === "function") el.addEventListener(ev, v);
         continue;
       }
 
-      if (k.startsWith('on')) {
+      if (k.startsWith("on")) {
         const ev = k.slice(2).toLowerCase();
-        if (typeof v === 'function') el.addEventListener(ev, v);
+        if (typeof v === "function") el.addEventListener(ev, v);
         continue;
       }
 
       if (
-        typeof v === 'function' &&
-        typeof (v as any).subscribe === 'function'
+        typeof v === "function" &&
+        typeof (v as any).subscribe === "function"
       ) {
         const sig = v as Signal<any>;
         const apply = (val: any) => {
-          if (typeof val === 'boolean' && k in el) {
+          if (typeof val === "boolean" && k in el) {
             (el as any)[k] = val;
             return;
           }
 
-          if (k === 'class') el.className = val ?? '';
+          if (k === "class") el.className = val ?? "";
           else if (k in el) (el as any)[k] = val;
-          else if (val === true) el.setAttribute(k, '');
+          else if (val === true) el.setAttribute(k, "");
           else if (val === false) el.removeAttribute(k);
           else el.setAttribute(k, String(val));
         };
@@ -53,12 +53,12 @@ export function h(
         continue;
       }
 
-      if (k === 'class') {
-        el.className = v ?? '';
+      if (k === "class") {
+        el.className = v ?? "";
       } else if (k in el) {
         (el as any)[k] = v;
       } else if (v === true) {
-        el.setAttribute(k, '');
+        el.setAttribute(k, "");
       } else if (v != null && v !== false) {
         el.setAttribute(k, String(v));
       }
@@ -79,12 +79,12 @@ function appendChildren(parent: HTMLElement, kids: Child[]): void {
       continue;
     }
 
-    if (typeof child === 'function' && (child as any).subscribe) {
+    if (typeof child === "function" && (child as any).subscribe) {
       parent.append(bindText(child as any));
       continue;
     }
 
-    if (typeof child === 'string' || typeof child === 'number') {
+    if (typeof child === "string" || typeof child === "number") {
       parent.append(document.createTextNode(String(child)));
       continue;
     }
@@ -94,8 +94,8 @@ function appendChildren(parent: HTMLElement, kids: Child[]): void {
 }
 
 export function mount(el: HTMLElement | string, root: HTMLElement): void {
-  root.textContent = '';
-  if (typeof el === 'string') root.textContent = el;
+  root.textContent = "";
+  if (typeof el === "string") root.textContent = el;
   else root.append(el);
 }
 
@@ -116,7 +116,7 @@ const cleanupStack: (() => void)[] = [];
 
 export const path = signal(window.location.pathname);
 
-window.addEventListener('popstate', () => path.set(location.pathname));
+window.addEventListener("popstate", () => path.set(location.pathname));
 
 let activeComputed: (() => void) | null = null;
 let activeWatch: (() => void) | null = null;
@@ -143,7 +143,7 @@ export function resource<T>(loader: () => Promise<T>): Signal<T | null> {
 }
 
 export function navigate(to: string) {
-  history.pushState(null, '', to);
+  history.pushState(null, "", to);
   path.set(to);
 }
 
@@ -157,7 +157,7 @@ export function store<T extends object>(obj: T): T {
   const proxy = new Proxy(obj, {
     get(_, k) {
       const v = s()[k as keyof T];
-      return typeof v === 'object' ? store(v as any) : v;
+      return typeof v === "object" ? store(v as any) : v;
     },
     set(_, k, v) {
       const copy = { ...s() };
@@ -219,7 +219,7 @@ export function onMount(fn: () => void) {
 }
 
 export function mountApp(app: () => HTMLElement, root: HTMLElement): void {
-  root.textContent = '';
+  root.textContent = "";
   root.append(app());
 }
 
@@ -284,7 +284,7 @@ export function provide<T>(key: ContextKey, value: T) {
 export function useContext<T>(key: ContextKey): T | undefined {
   for (let i = contextStack.length - 1; i >= 0; i--) {
     const found = contextStack[i];
-    if (key in found) return found[key];
+    if (key in found!) return found![key];
   }
   return undefined;
 }
@@ -305,12 +305,12 @@ export function withProvider<T>(
 }
 
 export function bindText(sig: Signal<any>): Text {
-  if (typeof sig !== 'function' || typeof sig.subscribe !== 'function') {
+  if (typeof sig !== "function" || typeof sig.subscribe !== "function") {
     return document.createTextNode(String(sig));
   }
 
   const getVal =
-    typeof sig === 'function' ? (sig as () => any) : () => (sig as any).get();
+    typeof sig === "function" ? (sig as () => any) : () => (sig as any).get();
 
   const node = document.createTextNode(String(getVal()));
 
@@ -320,6 +320,107 @@ export function bindText(sig: Signal<any>): Text {
   });
 
   return node;
+}
+
+export interface TransitionStyles {
+  opacity?: string;
+  transform?: string;
+  visibility?: string;
+}
+
+export interface TransitionStep {
+  from?: TransitionStyles;
+  to?: TransitionStyles;
+  duration?: number;
+  easing?: string;
+}
+
+export interface TransitionOptions {
+  show: TransitionStep;
+  hide: TransitionStep;
+  hidden?: TransitionStyles;
+}
+
+export const presets: Record<string, TransitionOptions> = {
+  fade: {
+    show: {
+      from: { opacity: "0" },
+      to: { opacity: "1" },
+      duration: 250,
+      easing: "ease",
+    },
+    hide: {
+      from: { opacity: "1" },
+      to: { opacity: "0", visibility: "hidden" },
+      duration: 250,
+      easing: "ease",
+    },
+  },
+  slide: {
+    show: {
+      from: { transform: "translateY(10px)", opacity: "0" },
+      to: { transform: "translateY(0)", opacity: "1" },
+    },
+    hide: {
+      from: { transform: "translateY(0)", opacity: "1" },
+      to: { transform: "translateY(-10px)", opacity: "0" },
+    },
+  },
+  scale: {
+    show: {
+      from: { transform: "scale(0.8)", opacity: "0" },
+      to: { transform: "scale(1)", opacity: "1" },
+    },
+    hide: {
+      from: { transform: "scale(1)", opacity: "1" },
+      to: { transform: "scale(0.8)", opacity: "0" },
+    },
+  },
+};
+
+/**
+ * Generic transition controller.
+ * @param el - Element to animation
+ * @param active - Reactive signal controlling visibility.
+ * @param options - Transition type or custom definition.
+ *
+ */
+export function transition(
+  el: HTMLElement,
+  active: Signal<boolean>,
+  options: TransitionOptions | keyof typeof presets = "fade",
+): void {
+  const config =
+    typeof options === "string" ? presets[options] : (options ?? presets.fade);
+
+  if (!active()) {
+    applyStyles(el, config?.hidden);
+  }
+
+  effect(() => {
+    if (active()) runTransition(el, config!.show);
+    else runTransition(el, config!.hide);
+  });
+}
+
+function runTransition(el: HTMLElement, step: TransitionStep) {
+  const { from, to, duration = 250, easing = "ease" } = step;
+  if (!to) return;
+
+  el.style.transition = "none";
+  if (from) applyStyles(el, from);
+
+  // trigger layout to flush the style changes
+  el.getBoundingClientRect();
+  el.style.transition = `all ${duration}ms ${easing}`;
+  applyStyles(el, to);
+}
+
+function applyStyles(el: HTMLElement, styles?: TransitionStyles) {
+  if (!styles) return;
+  for (const [k, v] of Object.entries(styles)) {
+    (el.style as any)[k] = v!;
+  }
 }
 
 function shallowReplace(oldNode: Node, newNode: Node) {
