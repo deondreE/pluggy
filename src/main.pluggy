@@ -112,21 +112,21 @@ export function App() {
       <div style="font-family:sans-serif; padding:1rem;">
         <h1>Todo List ({todoCount})</h1>
         <button onClick={addTodo}>+ Add Todo</button>
-
+        
         <ul style="margin-top:1rem;">
-          {each(todos, (item) => (
-            <li key={item.id}>
-              {item.text}
-              <button
-                onClick={() => removeTodo(item.id)}
+            {each(todos, (item) => (
+            <li>
+                {() => item().text}
+                <button
+                onClick={() => removeTodo(item().id)}
                 style="margin-left:0.5rem;"
-              >
+                >
                 🗑
-              </button>
+                </button>
             </li>
-          ))}
+            ))}
         </ul>
-      </div>
+        </div>
     </div>
   );
 }

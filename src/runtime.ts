@@ -248,25 +248,115 @@ export function batch(fn: () => {}) {
  * @param render Function that receives a signal for each item and its index.
  * @returns An array of text/elements you can insert as child.
  */
-export function each<T>(
+export function each<T extends { id?: string | number }>(
+  list: Signal<T[]>,
+  render: (item: Signal<T>, index: Signal<number>) => HTMLElement | Text,
+): Node[] {
+  const lookup = new Map<
+    string | number,
+    { sig: Signal<T>; idx: Signal<number>; node: Node }
+  >();
+
+  // Create initial nodes
+  const initial = list();
+  const nodes: Node[] = [];
+  for (let i = 0; i < initial.length; i++) {
+    const item = signal(initial[i]!);
+    const idx = signal(i);
+    const node = render(item, idx);
+    lookup.set(initial[i]!.id ?? i, { sig: item, idx, node });
+    nodes.push(node);
+  }
+
+  // Anchor comment ensures stable insertion point for later updates
+  const marker = document.createComment("each-marker");
+  nodes.push(marker);
+
+  // Reactive update effect
+  effect(() => {
+    const arr = list() || [];
+    const used = new Set<string | number>();
+    const parent = marker.parentNode;
+    if (!parent) return;
+
+    // Update or add items
+    for (let i = 0; i < arr.length; i++) {
+      const val = arr[i]!;
+      const key = val.id ?? i;
+      used.add(key);
+
+      let rec = lookup.get(key);
+      if (!rec) {
+        const sig = signal(val);
+        const idx = signal(i);
+        const node = render(sig, idx);
+        rec = { sig, idx, node };
+        lookup.set(key, rec);
+        parent.insertBefore(node, marker);
+      } else {
+        rec.sig.set(val);
+        rec.idx.set(i);
+      }
+    }
+
+    // Remove missing nodes
+    for (const [key, rec] of lookup) {
+      if (!used.has(key)) {
+        if (rec.node.parentNode) rec.node.remove();
+        lookup.delete(key);
+      }
+    }
+  });
+
+  return nodes;
+}
+
+export function eachKeyed<T extends { id: string | number }>(
   list: Signal<T[]>,
   render: (item: Signal<T>, index: Signal<number>) => HTMLElement | Text,
 ): HTMLElement[] {
-  const current: HTMLElement[] = [];
-  const rebuild = () => {
-    for (const el of current) el.remove();
-    current.length = 0;
-    for (let i = 0; i < list().length; i++) {
-      const itemSig = signal(list()[i]);
-      const iSig = signal(i);
-      const node = render(itemSig, iSig);
-      current.push(node);
-    }
-    return current;
-  };
+  const currentMap = new Map<
+    string | number,
+    { node: Node; item: Signal<T>; index: Signal<number> }
+  >();
+  const output: Node[] = [];
 
-  list.subscribe(() => rebuild());
-  return rebuild();
+  effect(() => {
+    const nextList = list() || [];
+    const visited = new Set<string | number>();
+
+    for (let i = 0; i < nextList.length; i++) {
+      const it = nextList[i]!;
+      const key = (it as any).id;
+      visited.add(key);
+      let r = currentMap.get(key);
+      if (!r) {
+        const sig = signal(it);
+        const idxSig = signal(i);
+        const node = render(sig, idxSig);
+        r = { node, item: sig, index: idxSig };
+        currentMap.set(key, r);
+      } else {
+        r.item.set(it);
+        r.index.set(i);
+      }
+      output[i] = r.node;
+    }
+
+    // remove old ones that disappeared
+    for (const [k, entry] of currentMap) {
+      if (!visited.has(k)) {
+        entry.node.remove();
+        currentMap.delete(k);
+      }
+    }
+
+    output.forEach((node) => {
+      if (!node.parentNode) document.body.append(node);
+    });
+  });
+
+  return output as HTMLElement[];
 }
 
 /**
@@ -275,7 +365,7 @@ export function each<T>(
  */
 export function provide<T>(key: ContextKey, value: T) {
   if (contextStack.length === 0) contextStack.push({});
-  contextStack[contextStack.length - 1][key] = value;
+  contextStack[contextStack.length - 1]![key] = value;
 }
 
 /**
