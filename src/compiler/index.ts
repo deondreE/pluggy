@@ -31,12 +31,13 @@ export function compile(
       jsx = /return\s*\(([\s\S]*)\)\s*;?/.exec(template)?.[1]?.trim() ?? '';
     }
 
-    /* ---------- Transform JSX ---------- */
+    // ---------- Transform JSX ----------
     const tokens = tokenize(jsx);
     const ast = parse(tokens);
     const optimized = optimize(ast);
     const expression = generate(optimized);
 
+    // ----- case 1: already <Component> file -----
     if (alreadyHasComponent) {
       let result = template.replace(
         /return\s*\([\s\S]*\)\s*;?/m,
@@ -58,10 +59,13 @@ ${needsDefaultExport ? `export default App;` : ''}
       return result + '\n';
     }
 
-    /* ---------- Plain template mode ---------- */
-    if (!wrap) return prefix + '\nreturn ' + expression + ';\n';
+    // ----- case 2: plain template (no wrapper) -----
+    if (!wrap) {
+      // ✅ no prefixing `return` — tests expect just expression string
+      return expression;
+    }
 
-    /* ---------- Wrapped component ---------- */
+    // ----- case 3: wrapped standalone component -----
     const header = `import {
   h,
   mountApp,

@@ -1,10 +1,25 @@
+export interface Token {
+  type:
+    | "tagOpen"
+    | "tagClose"
+    | "attrName"
+    | "attrValue"
+    | "exprOpen"
+    | "exprClose"
+    | "text"
+    | "eof";
+  name?: string;
+  value?: string;
+}
+
 export function tokenize(src: string): Token[] {
   const out: Token[] = [];
   const len = src.length;
   let i = 0;
-  let inExpr = 0; // depth of {...}
+  let braceDepth = 0;
 
   const eat = (n = 1) => (i += n);
+  const peek = () => src[i];
   const readWhile = (re: RegExp) => {
     const s = i;
     while (i < len && re.test(src[i]!)) i++;
@@ -12,130 +27,115 @@ export function tokenize(src: string): Token[] {
   };
 
   while (i < len) {
-    const ch = src[i]!;
+    const ch = peek();
 
-    /* --------- braces --------- */
+    /* ---------- { expressions } ---------- */
     if (ch === "{") {
       out.push({ type: "exprOpen" });
-      inExpr++;
+      braceDepth++;
       eat();
       continue;
     }
-    if (ch === "}" && inExpr > 0) {
+    if (ch === "}" && braceDepth > 0) {
       out.push({ type: "exprClose" });
-      inExpr--;
+      braceDepth--;
       eat();
       continue;
     }
 
-    /* --------- tags (even in expressions) --------- */
-    if (ch === "<") {
-      const next = src[i + 1];
-      // closing tag </...
-      if (next === "/") {
-        i += 2;
-        const name = readWhile(/[A-Za-z0-9:_-]/);
-        if (src[i] === ">") i++;
-        out.push({ type: "tagClose", name });
-        continue;
-      }
+    /* ---------- closing tag </div> ---------- */
+    if (ch === "<" && src[i + 1] === "/") {
+      i += 2;
+      const name = readWhile(/[A-Za-z0-9:_-]/);
+      if (peek() === ">") eat();
+      out.push({ type: "tagClose", name });
+      continue;
+    }
 
-      // opening tag <x ...>
-      if (/[A-Za-z]/.test(next)) {
-        i++;
-        const tag = readWhile(/[A-Za-z0-9:_-]/);
-        out.push({ type: "tagOpen", name: tag });
+    /* ---------- opening tag <div> ---------- */
+    if (ch === "<" && /[A-Za-z]/.test(src[i + 1] || "")) {
+      eat();
+      const tag = readWhile(/[A-Za-z0-9:_-]/);
+      out.push({ type: "tagOpen", name: tag });
 
-        // --- attributes ---
-        while (i < len) {
-          const c = src[i]!;
-          if (c === ">" || c === "/") break;
-          if (/\s/.test(c)) {
-            i++;
-            continue;
-          }
+      // Attributes
+      while (i < len) {
+        const c = peek();
+        if (c === ">" || c === "/") break;
+        if (/\s/.test(c)) {
+          eat();
+          continue;
+        }
 
-          const attrName = readWhile(/[A-Za-z0-9:_-]/);
-          if (!attrName) {
-            i++;
-            continue;
-          }
-          out.push({ type: "attrName", name: attrName });
+        const attr = readWhile(/[A-Za-z0-9:_-]/);
+        if (!attr) {
+          eat();
+          continue;
+        }
+        out.push({ type: "attrName", name: attr });
 
-          if (src[i] === "=") {
-            i++;
+        if (peek() === "=") {
+          eat();
 
-            // quoted value
-            if (src[i] === '"' || src[i] === "'") {
-              const quote = src[i];
-              i++;
-              const s = i;
-              while (i < len && src[i] !== quote) i++;
-              out.push({ type: "attrValue", value: src.slice(s, i) });
-              if (src[i] === quote) i++;
-              continue;
-            }
-
-            // braced {expr} value
-            if (src[i] === "{") {
-              out.push({ type: "exprOpen" });
-              i++;
-              const s = i;
-              let depth = 1;
-              while (i < len && depth > 0) {
-                if (src[i] === "{") depth++;
-                else if (src[i] === "}") depth--;
-                if (depth > 0) i++;
-              }
-              const val = src.slice(s, i).trim();
-              out.push({ type: "attrValue", value: val });
-              if (src[i] === "}") {
-                out.push({ type: "exprClose" });
-                i++;
-              }
-              continue;
-            }
-
-            // bare token value
-            const val = readWhile(/[^\s>]/);
+          // quoted value "..."
+          if (peek() === '"' || peek() === "'") {
+            const q = peek();
+            eat();
+            const s = i;
+            while (i < len && peek() !== q) eat();
+            const val = src.slice(s, i);
+            if (peek() === q) eat();
             out.push({ type: "attrValue", value: val });
             continue;
           }
 
-          // bare attribute like "disabled"
-          out.push({ type: "attrName", name: attrName });
-        }
+          // braced value { expr }
+          if (peek() === "{") {
+            eat();
+            let depth = 1;
+            const s = i;
+            while (i < len && depth > 0) {
+              const c2 = peek();
+              if (c2 === "{") depth++;
+              else if (c2 === "}") {
+                depth--;
+                if (depth === 0) break;
+              }
+              eat();
+            }
+            const inner = src.slice(s, i).trim();
+            if (peek() === "}") eat();
+            out.push({ type: "attrValue", value: inner });
+            continue;
+          }
 
-        // self-closing
-        if (src[i] === "/") {
-          i++;
-          if (src[i] === ">") i++;
-          out.push({ type: "tagClose", name: tag });
+          // bare value
+          const bare = readWhile(/[^\s>]/);
+          out.push({ type: "attrValue", value: bare });
           continue;
         }
 
-        if (src[i] === ">") i++;
+        // bare attr
+        out.push({ type: "attrName", name: attr });
+      }
+
+      // self-close
+      if (peek() === "/") {
+        eat();
+        if (peek() === ">") eat();
+        out.push({ type: "tagClose", name: tag });
         continue;
       }
-    }
 
-    /* --------- text inside expression --------- */
-    if (inExpr > 0) {
-      const s = i;
-      while (i < len && src[i] !== "{" && src[i] !== "}" && src[i] !== "<") i++;
-      const v = src.slice(s, i);
-      if (v) out.push({ type: "text", value: v });
+      if (peek() === ">") eat();
       continue;
     }
 
-    /* --------- normal plain text --------- */
+    /* ---------- plain text ---------- */
     const s = i;
-    while (i < len) {
-      const c = src[i]!;
-      if (c === "<" || c === "{" || c === "}") break;
-      i++;
-    }
-    if (i > s) out.push({ type: "text", value: src.slice(s, i) });
+    while (i < len && !["<", "{", "}"].includes(peek()!)) eat();
+    const v = src.slice(s, i);
+    if (v) out.push({ type: "text", value: v });
   }
 
   out.push({ type: "eof" });
