@@ -1,3 +1,21 @@
+export function bindText(sig: Signal<any>): Text {
+  if (typeof sig !== "function" || typeof sig.subscribe !== "function") {
+    return document.createTextNode(String(sig));
+  }
+
+  const getVal =
+    typeof sig === "function" ? (sig as () => any) : () => (sig as any).get();
+
+  const node = document.createTextNode(String(getVal()));
+
+  sig.subscribe(() => {
+    const newVal = String(getVal());
+    if (node.nodeValue !== newVal) node.nodeValue = newVal;
+  });
+
+  return node;
+}
+
 export interface Signal<T> {
   (): T;
   set(v: T): void;
@@ -250,24 +268,6 @@ export function withProvider<T>(
   return el;
 }
 
-export function bindText(sig: Signal<any>): Text {
-  if (typeof sig !== "function" || typeof sig.subscribe !== "function") {
-    return document.createTextNode(String(sig));
-  }
-
-  const getVal =
-    typeof sig === "function" ? (sig as () => any) : () => (sig as any).get();
-
-  const node = document.createTextNode(String(getVal()));
-
-  sig.subscribe(() => {
-    const newVal = String(getVal());
-    if (node.nodeValue !== newVal) node.nodeValue = newVal;
-  });
-
-  return node;
-}
-
 export interface TransitionStyles {
   opacity?: string;
   transform?: string;
@@ -347,4 +347,24 @@ export function transition(
     if (active()) runTransition(el, config!.show);
     else runTransition(el, config!.hide);
   });
+}
+
+function runTransition(el: HTMLElement, step: TransitionStep) {
+  const { from, to, duration = 250, easing = "ease" } = step;
+  if (!to) return;
+
+  el.style.transition = "none";
+  if (from) applyStyles(el, from);
+
+  // trigger layout to flush the style changes
+  el.getBoundingClientRect();
+  el.style.transition = `all ${duration}ms ${easing}`;
+  applyStyles(el, to);
+}
+
+function applyStyles(el: HTMLElement, styles?: TransitionStyles) {
+  if (!styles) return;
+  for (const [k, v] of Object.entries(styles)) {
+    (el.style as any)[k] = v!;
+  }
 }

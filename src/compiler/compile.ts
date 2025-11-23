@@ -6,6 +6,7 @@ import { generate } from "./codegen";
 export interface CompileOptions {
   wrap?: boolean;
   name?: string;
+  isPage?: boolean;
 }
 
 export function compile(
@@ -94,7 +95,7 @@ export function compile(
       return wrap ? wrapComponent(expr, name) : expr;
     }
 
-    if (!/mountApp\s*\(/.test(output)) {
+    if (options.isPage && !/mountApp\s*\(/.test(output)) {
       const match = output.match(/\bexport\s+function\s+([A-Z]\w*)/);
       const comp = match ? match[1] : name;
       const defaultExists = /\bexport\s+default\s+[A-Z]/.test(output);

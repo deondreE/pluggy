@@ -1,17 +1,19 @@
 import {
-                signal,
-                effect,
-                h,
-                store,
-                computed,
-                batch,
-                each,
-                resource,
-                mountApp,
-                transition,
-                navigate,
-                createApp,
-            } from "/src/runtime";
+    signal,
+    effect,
+    h,
+    store,
+    computed,
+    batch,
+    each,
+    resource,
+    mountApp,
+    transition,
+    navigate,
+    createApp,
+} from "/src/runtime";
+import { Button } from "../components/btn.pluggy";
+
 
 export function App() {
   const disabled = signal(false);
@@ -126,6 +128,8 @@ export function App() {
           ))}
         </ul>
       </div>
+      <Button />
     </div>
   );
 }
+

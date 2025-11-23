@@ -1,9 +1,21 @@
 import type { Plugin } from "vite";
 import { compile } from "../src/compiler";
+import {
+  extractPluggyImports,
+  stripPluggyImports,
+} from "../src/compiler/utils";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+/**
+ * Vite plugin: Pluggy compiler
+ * ---------------------------------------
+ *  - Compiles `.pluggy` templates into JS modules
+ *  - Recursively inlines imported `.pluggy` components
+ *  - Builds virtual route definitions from /src/pages
+ *  - Supports hot reload for rapid development
+ */
 export default function pluggy(): Plugin {
   const pagesDir = path.resolve(process.cwd(), "src/pages");
   const virtualId = "virtual:pluggy-id";
@@ -14,32 +26,81 @@ export default function pluggy(): Plugin {
     name: "pluggy:compiler",
     enforce: "pre",
 
+    /**
+     * Compile each `.pluggy` file encountered by Vite.
+     * For pages, recursively inline all referenced components.
+     */
     transform(source, id) {
       if (!id.endsWith(".pluggy")) return null;
+
       const src = source.trim();
+      const isPage = id.includes("/pages/");
       const name = makeName(path.basename(id, ".pluggy"));
       const isComp = /\bexport\s+function\s+[A-Z]/.test(src);
+
+      const pluggyImports = extractPluggyImports(src);
+      const stripped = stripPluggyImports(source);
+
       let js: string;
+
       try {
-        js = compile(src, { wrap: !isComp, name });
-      } catch {
-        js = `import {h} from './runtime'
-export function ${name}(){return h('div',null,'❌ compile error')}
-export default ${name}`;
+        // Step 1: compile current file
+        js = compile(stripped.trim(), { wrap: !isComp, name, isPage });
+        stripPluggyImports(js);
+
+        // Step 2: recursively inline any imported `.pluggy` components
+        if (isPage && pluggyImports.length) {
+          let combined = "";
+          for (const imp of pluggyImports) {
+            const abs = path.resolve(path.dirname(id), imp);
+            const code = fs.readFileSync(abs, "utf-8");
+            const compName = makeName(path.basename(abs, ".pluggy"));
+
+            const compJs = compile(code, {
+              wrap: false,
+              name: compName,
+              isPage: false,
+            });
+
+            combined += `\n// inlined: ${imp}\n${compJs}\n`;
+          }
+
+          // Prepend components above the main page code
+          js = combined + "\n" + js;
+        }
+      } catch (err) {
+        console.error("[pluggy] compile error:", err);
+        // fallback: emit a basic component for runtime visibility
+        js = `import { h } from './runtime';
+export function ${name}(){
+  return h('div',null,'❌ compile error')
+}
+export default ${name};`;
       }
+
       const out = path.resolve(".pluggy-out");
       if (!fs.existsSync(out)) fs.mkdirSync(out, { recursive: true });
       fs.writeFileSync(
         path.join(out, createHash("md5").update(id).digest("hex") + ".js"),
         js,
       );
+
       return { code: js, map: null };
     },
 
+    /**
+     * Allow Vite to handle normal resolution of `.pluggy` imports
+     * (we intercept and compile them in `transform()`).
+     */
     resolveId(id) {
+      if (id.endsWith(".pluggy")) return null;
       if (id === virtualId) return resolvedId;
     },
 
+    /**
+     * Virtual module `virtual:pluggy-id`
+     * → produces dynamic route definitions for `/src/pages`
+     */
     load(id) {
       if (id !== resolvedId) return null;
       if (cache) return cache;
@@ -57,13 +118,21 @@ export default ${name}`;
   component:()=>import("${importPath}"),
   layout:${layout ? `"${layout}"` : "null"},
   server:${server ? `"${server}"` : "null"},
-  meta:async()=>{const m=await import("${importPath}");return{title:m.title??null,description:m.description??null}}
+  meta:async()=>{const m=await import("${importPath}");
+    return{title:m.title??null,description:m.description??null}}
 }`;
       });
+
       cache = `export default [${routes.join(",")}]`;
       return cache;
     },
 
+    /**
+     * Hot reload handler:
+     *  - Clears route cache
+     *  - Invalidates the virtual module
+     *  - Requests full browser reload
+     */
     handleHotUpdate(ctx) {
       if (!ctx.file.endsWith(".pluggy")) return;
       cache = "";
@@ -75,6 +144,8 @@ export default ${name}`;
   };
 }
 
+
+/** Collect all page files recursively under a directory */
 function flatFiles(dir: string, out: string[] = []): string[] {
   for (const item of fs.readdirSync(dir)) {
     const full = path.join(dir, item);
@@ -85,6 +156,7 @@ function flatFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+/** PascalCase name generation from filename */
 function makeName(s: string) {
   const clean = s.replace(/\[|\]/g, "");
   return /^[A-Z]/.test(clean)
@@ -92,6 +164,7 @@ function makeName(s: string) {
     : clean.charAt(0).toUpperCase() + clean.slice(1);
 }
 
+/** URL path inference from file path */
 function makeUrl(rel: string) {
   const base = path.basename(rel, ".pluggy").toLowerCase();
   if (base === "app") return "/";
@@ -104,6 +177,7 @@ function makeUrl(rel: string) {
   return url.replace(/\/+/g, "/");
 }
 
+/** Walk upward to find nearest `_layout.pluggy` file */
 function findLayout(root: string, abs: string) {
   let dir = path.dirname(abs);
   while (dir.startsWith(root)) {
@@ -114,6 +188,7 @@ function findLayout(root: string, abs: string) {
   return null;
 }
 
+/** Walk upward to find nearest `+server.ts` endpoint file */
 function findServer(root: string, abs: string) {
   let dir = path.dirname(abs);
   while (dir.startsWith(root)) {
