@@ -10,11 +10,22 @@ export type Child =
   | undefined
   | Child[];
 
-export function h(
-  tag: string,
-  props: Props,
-  ...children: Child[]
-): HTMLElement {
+export function h(tag: any, props: Props, ...children: Child[]): HTMLElement {
+  if (typeof tag === "function") {
+    // Flatten children, inject into props
+    const merged = props ? { ...props } : {};
+    merged.children = children.flat();
+    const out = tag(merged);
+    // components can return either HTMLElement, string, or Text
+    if (out instanceof Node) return out as HTMLElement;
+    if (typeof out === "string") {
+      const span = document.createElement("span");
+      span.textContent = out;
+      return span;
+    }
+    console.warn("[h] component returned unsupported type:", out);
+    return document.createComment("invalid component return");
+  }
   const el = document.createElement(tag);
 
   if (props) {

@@ -10,6 +10,10 @@ export type Node =
   | { type: "Text"; value: string }
   | { type: "Expression"; code: string };
 
+/**
+ * Recursive-descent parser for JSX Tokens.
+ * Produces a simple AST of Elements, Text, and Expression nodes.
+ */
 export function parse(tokens: Token[]): Node[] {
   let i = 0;
   const peek = () => tokens[i];
@@ -17,45 +21,42 @@ export function parse(tokens: Token[]): Node[] {
 
   return parseNodes();
 
-  /* ----------------------- Helpers ----------------------- */
+  /* ---------- Helpers ---------- */
   function parseNodes(stopTag?: string): Node[] {
     const nodes: Node[] = [];
     while (true) {
       const t = peek();
       if (!t || t.type === "eof") break;
 
-      // closing tag
+      // end tag
       if (t.type === "tagClose") {
         eat();
         if (t.name === stopTag) break;
         continue;
       }
 
-      // nested element
       if (t.type === "tagOpen") {
         nodes.push(parseElement());
         continue;
       }
 
-      // plain text
       if (t.type === "text") {
-        nodes.push({ type: "Text", value: eat()?.value ?? "" });
+        nodes.push({ type: "Text", value: eat()!.value ?? "" });
         continue;
       }
 
-      // { expression }
       if (t.type === "exprOpen") {
         eat();
         nodes.push(parseExpr());
         continue;
       }
 
-      eat(); // skip anything else
+      eat(); // skip unknown
     }
     return nodes;
   }
 
-  /* { ... } expressions ----------------------------------- */
+  /* ---------- { expr } ---------- */
   function parseExpr(): Node {
     let depth = 1;
     const parts: string[] = [];
@@ -69,29 +70,29 @@ export function parse(tokens: Token[]): Node[] {
           depth++;
           eat();
           continue;
-
         case "exprClose":
           depth--;
           eat();
           if (depth === 0) break;
           continue;
 
-        // --- Nested JSX element inside expression ---
-        case "tagOpen": {
-          const elem = parseElement();
-          parts.push(inline(elem));
+        // nested JSX element inside expression
+        case "tagOpen":
+          const element = parseElement();
+          parts.push(inline(element));
+          continue;
+
+        case "text": {
+          const val = eat()!.value ?? "";
+          // identifiers -> unquoted code instead of string
+          if (/^[A-Za-z_$][\w$]*$/.test(val.trim())) parts.push(val.trim());
+          else parts.push(val);
           continue;
         }
 
-        // --- Text inside expression body ---
-        case "text":
-          parts.push(eat()?.value ?? "");
-          continue;
-
-        // --- Attribute names (e.g. variable or symbol text) ---
         default:
           if (t.name) {
-            parts.push(eat()?.name!);
+            parts.push(eat()!.name!);
             continue;
           }
           eat();
@@ -101,7 +102,7 @@ export function parse(tokens: Token[]): Node[] {
 
     return { type: "Expression", code: parts.join("").trim() };
 
-    /* Internal inline JSX → h() */
+    // inline element renderer for nested elements in expressions
     function inline(n: Node): string {
       if (n.type === "Text") return JSON.stringify(n.value);
       if (n.type === "Expression") return `(${n.code})`;
@@ -127,12 +128,13 @@ export function parse(tokens: Token[]): Node[] {
     }
   }
 
-  /* <tag ...attrs> ... </tag> ------------------------------ */
+  /* ---------- <tag ...attrs>...</tag> ---------- */
   function parseElement(): Node {
-    const open = eat();
-    const tag = open?.name!;
+    const open = eat()!;
+    const tag = open.name!;
     const attrs: Record<string, string | null> = {};
 
+    // gather attributes
     while (true) {
       const t = peek();
       if (
@@ -146,21 +148,14 @@ export function parse(tokens: Token[]): Node[] {
         break;
 
       if (t.type === "attrName") {
-        const name = eat()?.name!;
+        const name = eat()!.name!;
         let val: string | null = null;
         const n1 = peek();
 
-        // attr = "literal"
-        if (n1?.type === "attrValue") {
-          val = eat()?.value ?? null;
-        }
-        // attr = {expr}
+        if (n1?.type === "attrValue") val = eat()!.value ?? null;
         else if (n1?.type === "exprOpen") {
           eat(); // {
-          if (peek()?.type === "attrValue") {
-            // get raw expression, store without braces
-            val = eat()?.value ?? null;
-          }
+          if (peek()?.type === "attrValue") val = eat()!.value ?? null;
           if (peek()?.type === "exprClose") eat();
         }
 
@@ -171,7 +166,7 @@ export function parse(tokens: Token[]): Node[] {
       eat();
     }
 
-    // ---- children ----
+    // children
     const children = parseNodes(tag);
     return { type: "Element", tag, attrs, children };
   }

@@ -10,7 +10,6 @@ import {
   mountApp,
   transition,
 } from './runtime';
-
 export function App() {
   const disabled = signal(false);
 
@@ -103,6 +102,7 @@ export function App() {
           <button onClick={incBothBatched}>Increment (batched)</button>
         </div>
       </section>
+
 
       <section>
         <h2>Pokémon Resource</h2>

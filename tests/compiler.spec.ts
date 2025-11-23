@@ -1,242 +1,242 @@
 /* eslint-disable no-new-func */
-import { describe, it, expect } from 'vitest';
-import { tokenize } from '../src/compiler/lexer';
-import { parse } from '../src/compiler/parser';
-import { optimize } from '../src/compiler/transformer';
-import { generate } from '../src/compiler/codegen';
-import { compile } from '../src/compiler';
-import type { Node } from '../src/compiler/parser';
+import { describe, it, expect } from "vitest";
+import { tokenize } from "../src/compiler/lexer";
+import { parse } from "../src/compiler/parser";
+import { optimize } from "../src/compiler/transformer";
+import { generate } from "../src/compiler/codegen";
+import { compile } from "../src/compiler";
+import type { Node } from "../src/compiler/parser";
 
 /* ───────────────────────── LEXER ───────────────────────── */
-describe('lexer: tokenize', () => {
-  it('tokenizes nested tags and expressions', () => {
+describe("lexer: tokenize", () => {
+  it("tokenizes nested tags and expressions", () => {
     const src = `<div class="map"><h1>{msg}</h1><p>Hello</p></div>`;
     const tokens = tokenize(src);
 
     expect(tokens.map((t) => t.type)).toEqual([
-      'tagOpen',
-      'attrName',
-      'attrValue',
-      'tagOpen',
-      'exprOpen',
-      'text',
-      'exprClose',
-      'tagClose',
-      'tagOpen',
-      'text',
-      'tagClose',
-      'tagClose',
-      'eof',
+      "tagOpen",
+      "attrName",
+      "attrValue",
+      "tagOpen",
+      "exprOpen",
+      "text",
+      "exprClose",
+      "tagClose",
+      "tagOpen",
+      "text",
+      "tagClose",
+      "tagClose",
+      "eof",
     ]);
-    expect(tokens[0]).toMatchObject({ type: 'tagOpen', name: 'div' });
-    expect(tokens[1]).toMatchObject({ type: 'attrName', name: 'class' });
-    expect(tokens[2]).toMatchObject({ type: 'attrValue', value: 'map' });
+    expect(tokens[0]).toMatchObject({ type: "tagOpen", name: "div" });
+    expect(tokens[1]).toMatchObject({ type: "attrName", name: "class" });
+    expect(tokens[2]).toMatchObject({ type: "attrValue", value: "map" });
   });
 
-  it('handles plain text', () => {
-    expect(tokenize('hello world')).toEqual([
-      { type: 'text', value: 'hello world' },
-      { type: 'eof' },
+  it("handles plain text", () => {
+    expect(tokenize("hello world")).toEqual([
+      { type: "text", value: "hello world" },
+      { type: "eof" },
     ]);
   });
 
-  it('handles attribute expressions correctly', () => {
+  it("handles attribute expressions correctly", () => {
     const src = `<input value={count} id="x">`;
     const tokens = tokenize(src);
-    const attrNames = tokens.filter((x) => x.type === 'attrName');
-    const attrValues = tokens.filter((x) => x.type === 'attrValue');
+    const attrNames = tokens.filter((x) => x.type === "attrName");
+    const attrValues = tokens.filter((x) => x.type === "attrValue");
 
-    expect(attrNames.some((x) => (x as any).name === 'value')).toBe(true);
-    expect(attrValues.some((x) => (x as any).value === 'count')).toBe(true);
+    expect(attrNames.some((x) => (x as any).name === "value")).toBe(true);
+    expect(attrValues.some((x) => (x as any).value === "count")).toBe(true);
   });
 
-  it('handles bare attributes', () => {
+  it("handles bare attributes", () => {
     const src = `<button disabled>`;
     const tokens = tokenize(src);
-    const attr = tokens.find((t) => t.type === 'attrName');
-    expect(attr).toMatchObject({ name: 'disabled' });
+    const attr = tokens.find((t) => t.type === "attrName");
+    expect(attr).toMatchObject({ name: "disabled" });
   });
 
-  it('handles self-closing tags', () => {
+  it("handles self-closing tags", () => {
     const src = `<br/>`;
     const t = tokenize(src);
-    expect(t.some((x) => x.type === 'tagOpen')).toBe(true);
-    expect(t.some((x) => x.type === 'tagClose')).toBe(true);
+    expect(t.some((x) => x.type === "tagOpen")).toBe(true);
+    expect(t.some((x) => x.type === "tagClose")).toBe(true);
   });
 });
 
 /* ───────────────────────── PARSER ───────────────────────── */
-describe('parser: parse', () => {
-  it('builds correct AST for nested structure', () => {
+describe("parser: parse", () => {
+  it("builds correct AST for nested structure", () => {
     const ast = parse(tokenize(`<div><h1>{msg}</h1><p>Hi</p></div>`));
     expect(ast).toEqual([
       {
-        type: 'Element',
-        tag: 'div',
+        type: "Element",
+        tag: "div",
         attrs: {},
         children: [
           {
-            type: 'Element',
-            tag: 'h1',
+            type: "Element",
+            tag: "h1",
             attrs: {},
-            children: [{ type: 'Expression', code: 'msg' }],
+            children: [{ type: "Expression", code: "msg" }],
           },
           {
-            type: 'Element',
-            tag: 'p',
+            type: "Element",
+            tag: "p",
             attrs: {},
-            children: [{ type: 'Text', value: 'Hi' }],
+            children: [{ type: "Text", value: "Hi" }],
           },
         ],
       },
     ]);
   });
 
-  it('parses attributes with string and expression values', () => {
+  it("parses attributes with string and expression values", () => {
     // note: expression value stored as 'count' (no braces)
     const ast = parse(tokenize(`<input value={count} id="x" disabled>`));
     expect(ast).toEqual([
       {
-        type: 'Element',
-        tag: 'input',
-        attrs: { value: 'count', id: 'x', disabled: null },
+        type: "Element",
+        tag: "input",
+        attrs: { value: "count", id: "x", disabled: null },
         children: [],
       },
     ]);
   });
 
-  it('parses self-closing element', () => {
+  it("parses self-closing element", () => {
     const ast = parse(tokenize(`<br/>`));
     expect(ast).toEqual([
-      { type: 'Element', tag: 'br', attrs: {}, children: [] },
+      { type: "Element", tag: "br", attrs: {}, children: [] },
     ]);
   });
 
-  it('parses text + expression mix correctly', () => {
+  it("parses text + expression mix correctly", () => {
     const ast = parse(tokenize(`<span>Hello {user.name + "!"}</span>`));
     expect(ast[0].children).toEqual([
-      { type: 'Text', value: 'Hello ' },
-      { type: 'Expression', code: 'user.name + "!"' },
+      { type: "Text", value: "Hello " },
+      { type: "Expression", code: 'user.name + "!"' },
     ]);
   });
 
-  it('handles empty input safely', () => {
-    expect(parse(tokenize(''))).toEqual([]);
+  it("handles empty input safely", () => {
+    expect(parse(tokenize(""))).toEqual([]);
   });
 });
 
 /* ───────────────────────── OPTIMIZER ───────────────────────── */
-describe('optimizer', () => {
-  it('merges adjacent text nodes', () => {
+describe("optimizer", () => {
+  it("merges adjacent text nodes", () => {
     const ast: Node[] = [
-      { type: 'Text', value: 'Hello' },
-      { type: 'Text', value: ' ' },
-      { type: 'Text', value: 'World' },
+      { type: "Text", value: "Hello" },
+      { type: "Text", value: " " },
+      { type: "Text", value: "World" },
     ];
-    expect(optimize(ast)).toEqual([{ type: 'Text', value: 'Hello World' }]);
+    expect(optimize(ast)).toEqual([{ type: "Text", value: "Hello World" }]);
   });
 
-  it('keeps non-text nodes intact', () => {
+  it("keeps non-text nodes intact", () => {
     const ast: Node[] = [
-      { type: 'Text', value: '1' },
+      { type: "Text", value: "1" },
       {
-        type: 'Element',
-        tag: 'em',
+        type: "Element",
+        tag: "em",
         attrs: {},
-        children: [{ type: 'Text', value: 'emphasis' }],
+        children: [{ type: "Text", value: "emphasis" }],
       },
-      { type: 'Text', value: '2' },
+      { type: "Text", value: "2" },
     ];
     expect(optimize(ast)).toEqual(ast);
   });
 
-  it('recursively merges inside children', () => {
+  it("recursively merges inside children", () => {
     const ast: Node[] = [
       {
-        type: 'Element',
-        tag: 'p',
+        type: "Element",
+        tag: "p",
         attrs: {},
         children: [
-          { type: 'Text', value: 'Hi' },
-          { type: 'Text', value: ' ' },
-          { type: 'Text', value: 'there' },
+          { type: "Text", value: "Hi" },
+          { type: "Text", value: " " },
+          { type: "Text", value: "there" },
         ],
       },
     ];
     const out = optimize(ast);
-    expect(out[0].children).toEqual([{ type: 'Text', value: 'Hi there' }]);
+    expect(out[0].children).toEqual([{ type: "Text", value: "Hi there" }]);
   });
 });
 
 /* ───────────────────────── CODEGEN ───────────────────────── */
-describe('codegen: generate', () => {
-  it('turns text node into string literal', () => {
-    expect(generate([{ type: 'Text', value: 'Hello' }])).toBe('"Hello"');
+describe("codegen: generate", () => {
+  it("turns text node into string literal", () => {
+    expect(generate([{ type: "Text", value: "Hello" }])).toBe('"Hello"');
   });
 
-  it('turns expression node into evaluated parentheses', () => {
-    expect(generate([{ type: 'Expression', code: 'x + 1' }])).toBe('(x + 1)');
+  it("turns expression node into evaluated parentheses", () => {
+    expect(generate([{ type: "Expression", code: "x + 1" }])).toBe("(x + 1)");
   });
 
-  it('builds element without children', () => {
+  it("builds element without children", () => {
     expect(
-      generate([{ type: 'Element', tag: 'div', attrs: {}, children: [] }]),
+      generate([{ type: "Element", tag: "div", attrs: {}, children: [] }]),
     ).toBe('h("div", {})');
   });
 
-  it('renders nested element', () => {
+  it("renders nested element", () => {
     const ast: Node[] = [
       {
-        type: 'Element',
-        tag: 'section',
-        attrs: { id: 'hero' },
+        type: "Element",
+        tag: "section",
+        attrs: { id: "hero" },
         children: [
-          { type: 'Text', value: 'hi ' },
-          { type: 'Expression', code: 'user' },
+          { type: "Text", value: "hi " },
+          { type: "Expression", code: "user" },
         ],
       },
     ];
     expect(generate(ast)).toBe('h("section", {"id":"hero"}, "hi ", (user))');
   });
 
-  it('handles multiple attributes', () => {
+  it("handles multiple attributes", () => {
     const ast: Node[] = [
-      { type: 'Element', tag: 'div', attrs: { a: '1', b: '2' }, children: [] },
+      { type: "Element", tag: "div", attrs: { a: "1", b: "2" }, children: [] },
     ];
     expect(generate(ast)).toBe('h("div", {"a":"1","b":"2"})');
   });
 
-  it('returns array for multi roots', () => {
+  it("returns array for multi roots", () => {
     const ast: Node[] = [
-      { type: 'Text', value: 'A' },
-      { type: 'Text', value: 'B' },
+      { type: "Text", value: "A" },
+      { type: "Text", value: "B" },
     ];
     expect(generate(ast)).toBe('["A", "B"]');
   });
 
-  it('returns null when ast empty', () => {
-    expect(generate([])).toBe('null');
+  it("returns null when ast empty", () => {
+    expect(generate([])).toBe("null");
   });
 
-  it('produces valid executable js', () => {
+  it("produces valid executable js", () => {
     const ast: Node[] = [
       {
-        type: 'Element',
-        tag: 'span',
+        type: "Element",
+        tag: "span",
         attrs: {},
-        children: [{ type: 'Text', value: 'ok' }],
+        children: [{ type: "Text", value: "ok" }],
       },
     ];
     const code = generate(ast);
-    const fn = new Function('h', `return ${code}`);
+    const fn = new Function("h", `return ${code}`);
     const obj = fn((t: string, p: any, ...c: any[]) => ({ t, p, c }));
-    expect(obj).toEqual({ t: 'span', p: {}, c: ['ok'] });
+    expect(obj).toEqual({ t: "span", p: {}, c: ["ok"] });
   });
 });
 
 /* ───────────────────────── INTEGRATION ───────────────────────── */
-describe('integration', () => {
-  it('compiles small Pluggy component', () => {
+describe("integration", () => {
+  it("compiles small Pluggy component", () => {
     const code = compile(
       `<div class="map"><h1>{msg}</h1><p>Rendered!</p></div>`,
     );
@@ -245,17 +245,17 @@ describe('integration', () => {
     );
   });
 
-  it('supports expression + bare attributes', () => {
+  it("supports expression + bare attributes", () => {
     const code = compile(`<input value={count} disabled>`);
     expect(code).toBe('h("input", {"value":"count","disabled":null})');
   });
 
-  it('renders multi-root templates as arrays', () => {
+  it("renders multi-root templates as arrays", () => {
     const code = compile(`<p>A</p><p>B</p>`);
     expect(code).toBe('[h("p", {}, "A"), h("p", {}, "B")]');
   });
 
-  it('handles each() loop expressions', () => {
+  it("handles each() loop expressions", () => {
     const code = compile(
       `<ul>{each(todos, (item, i) => <li>{i}: {item}</li>)}</ul>`,
     );
@@ -264,12 +264,126 @@ describe('integration', () => {
     );
   });
 
-  it('compiles uppercase tags as components', () => {
+  it("compiles uppercase tags as components", () => {
     const code = compile(
       `<MyButton label="Save" onClick={handleSave}>Click me</MyButton>`,
     );
     expect(code).toBe(
       'h(MyButton, {"label":"Save","onClick":handleSave}, "Click me")',
     );
+  });
+
+  it("compiles multiple components defined in one file correctly", () => {
+    const src = `
+export function Header() {
+  return <h1>Header</h1>;
+}
+
+export function Footer() {
+  return <footer>Footer</footer>;
+}
+
+export function App() {
+  return (
+    <div>
+      <Header />
+      <Footer />
+    </div>
+  );
+}`;
+    const code = compile(src);
+
+    // full expected code output (without footer mount)
+    const expected = `
+export function Header() {
+  return h("h1", {}, "Header");
+}
+
+export function Footer() {
+  return h("footer", {}, "Footer");
+}
+
+export function App() {
+  return h("div", {}, h(Header, {}), h(Footer, {}));
+}
+`;
+
+    expect(code.trim()).toContain("export function Header");
+    expect(code.trim()).toContain("export function Footer");
+    expect(code.trim()).toContain("export function App");
+    expect(code.trim()).toContain("h(Header");
+    expect(code.trim()).toContain("h(Footer");
+
+    // stronger equality after normalizing whitespace
+    const normalize = (s: string) => s.replace(/\s+/g, "").trim();
+    expect(normalize(code)).toContain(normalize(expected));
+  });
+
+  it("compiles imported components and nested content properly", () => {
+    const src = `
+import { Header, Footer } from './layout.pluggy';
+
+export function App() {
+  return (
+    <div>
+      <Header />
+      <main>
+        <p>Inside main body.</p>
+      </main>
+      <Footer />
+    </div>
+  );
+}`;
+    const code = compile(src);
+
+    const expected = `
+import { Header, Footer } from './layout.pluggy';
+
+export function App() {
+  return h("div", {}, 
+    h(Header, {}), 
+    h("main", {}, h("p", {}, "Inside main body.")), 
+    h(Footer, {})
+  );
+}
+`;
+
+    const normalize = (s: string) => s.replace(/\s+/g, "").trim();
+
+    // Confirm import preserved and JSX converted to h() calls
+    expect(code).toContain("import { Header, Footer } from");
+    expect(code).toContain("h(Header");
+    expect(code).toContain("h(Footer");
+    expect(code).toContain('h("p", {}, "Inside main body.")');
+    expect(normalize(code)).toContain(normalize(expected));
+  });
+
+  it("compiles components that render children via {children}", () => {
+    const src = `
+export function Panel({ children }) {
+  return <section class="panel">{children}</section>;
+}
+
+export function App() {
+  return (
+    <Panel>
+      <p>Inside panel</p>
+    </Panel>
+  );
+}`;
+    const code = compile(src);
+
+    const expected = `
+export function Panel({ children }) {
+  return h("section", {"class":"panel"}, children);
+}
+
+export function App() {
+  return h(Panel, {}, h("p", {}, "Inside panel"));
+}
+`;
+
+    const normalize = (s: string) => s.replace(/\s+/g, "").trim();
+    expect(normalize(code)).toContain(normalize(expected));
   });
 });

@@ -12,6 +12,10 @@ export interface Token {
   value?: string;
 }
 
+/**
+ * Lightweight JSX tokenizer for Pluggy.
+ * - Handles nested tags, self-closing, `{expr}` braces, and attributes.
+ */
 export function tokenize(src: string): Token[] {
   const out: Token[] = [];
   const len = src.length;
@@ -36,6 +40,7 @@ export function tokenize(src: string): Token[] {
       eat();
       continue;
     }
+
     if (ch === "}" && braceDepth > 0) {
       out.push({ type: "exprClose" });
       braceDepth--;
@@ -47,37 +52,39 @@ export function tokenize(src: string): Token[] {
     if (ch === "<" && src[i + 1] === "/") {
       i += 2;
       const name = readWhile(/[A-Za-z0-9:_-]/);
+      // eat optional spaces & '>'
+      while (i < len && /\s/.test(peek()!)) eat();
       if (peek() === ">") eat();
       out.push({ type: "tagClose", name });
       continue;
     }
 
-    /* ---------- opening tag <div> ---------- */
+    /* ---------- opening tag <Div> or <div> ---------- */
     if (ch === "<" && /[A-Za-z]/.test(src[i + 1] || "")) {
-      eat();
+      eat(); // '<'
       const tag = readWhile(/[A-Za-z0-9:_-]/);
       out.push({ type: "tagOpen", name: tag });
 
-      // Attributes
+      /* --- attributes --- */
       while (i < len) {
         const c = peek();
         if (c === ">" || c === "/") break;
-        if (/\s/.test(c)) {
+        if (/\s/.test(c!)) {
           eat();
           continue;
         }
 
-        const attr = readWhile(/[A-Za-z0-9:_-]/);
-        if (!attr) {
+        const attrName = readWhile(/[A-Za-z0-9:_-]/);
+        if (!attrName) {
           eat();
           continue;
         }
-        out.push({ type: "attrName", name: attr });
+        out.push({ type: "attrName", name: attrName });
 
         if (peek() === "=") {
           eat();
 
-          // quoted value "..."
+          // quoted string
           if (peek() === '"' || peek() === "'") {
             const q = peek();
             eat();
@@ -89,7 +96,7 @@ export function tokenize(src: string): Token[] {
             continue;
           }
 
-          // braced value { expr }
+          // braced expression { ... }
           if (peek() === "{") {
             eat();
             let depth = 1;
@@ -103,23 +110,23 @@ export function tokenize(src: string): Token[] {
               }
               eat();
             }
-            const inner = src.slice(s, i).trim();
+            const val = src.slice(s, i).trim();
             if (peek() === "}") eat();
-            out.push({ type: "attrValue", value: inner });
+            out.push({ type: "attrValue", value: val });
             continue;
           }
 
-          // bare value
-          const bare = readWhile(/[^\s>]/);
-          out.push({ type: "attrValue", value: bare });
+          // bareword attr
+          const val = readWhile(/[^\s>]/);
+          out.push({ type: "attrValue", value: val });
           continue;
         }
 
-        // bare attr
-        out.push({ type: "attrName", name: attr });
+        // boolean attr
+        out.push({ type: "attrName", name: attrName });
       }
 
-      // self-close
+      // self-closing tag
       if (peek() === "/") {
         eat();
         if (peek() === ">") eat();
@@ -134,8 +141,8 @@ export function tokenize(src: string): Token[] {
     /* ---------- plain text ---------- */
     const s = i;
     while (i < len && !["<", "{", "}"].includes(peek()!)) eat();
-    const v = src.slice(s, i);
-    if (v) out.push({ type: "text", value: v });
+    const val = src.slice(s, i);
+    if (val) out.push({ type: "text", value: val });
   }
 
   out.push({ type: "eof" });
