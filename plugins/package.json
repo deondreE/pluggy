@@ -1,0 +1,16 @@
+{
+  "name": "pluggy-view-plugin",
+  "exports": {
+    ".": "./pluggy.js"
+  },
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": [
+    "Plugin"
+  ],
+  "author": "deondreE",
+  "license": "MIT",
+  "packageManager": "pnpm@10.17.0"
+}

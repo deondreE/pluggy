@@ -1,10 +1,9 @@
-import type { Plugin } from "vite";
 import { compile } from "../src/compiler";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-export default function pluggy(): Plugin {
+export default function pluggy() {
   const pagesDir = path.resolve(process.cwd(), "src/pages");
   const virtualId = "virtual:pluggy-id";
   const resolvedId = "\0" + virtualId;
@@ -19,7 +18,7 @@ export default function pluggy(): Plugin {
       const src = source.trim();
       const name = makeName(path.basename(id, ".pluggy"));
       const isComp = /\bexport\s+function\s+[A-Z]/.test(src);
-      let js: string;
+      let js;
       try {
         js = compile(src, { wrap: !isComp, name });
       } catch {
@@ -73,7 +72,7 @@ export default ${name}`;
   };
 }
 
-function flatFiles(dir: string, out: string[] = []): string[] {
+function flatFiles(dir, out) {
   for (const item of fs.readdirSync(dir)) {
     const full = path.join(dir, item);
     const stat = fs.statSync(full);
@@ -83,14 +82,14 @@ function flatFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-function makeName(s: string) {
+function makeName(s) {
   const clean = s.replace(/\[|\]/g, "");
   return /^[A-Z]/.test(clean)
     ? clean
     : clean.charAt(0).toUpperCase() + clean.slice(1);
 }
 
-function makeUrl(rel: string) {
+function makeUrl(rel) {
   const base = path.basename(rel, ".pluggy").toLowerCase();
   if (base === "app") return "/";
   const url =
@@ -102,7 +101,7 @@ function makeUrl(rel: string) {
   return url.replace(/\/+/g, "/");
 }
 
-function findLayout(root: string, abs: string) {
+function findLayout(root, abs) {
   let dir = path.dirname(abs);
   while (dir.startsWith(root)) {
     const f = path.join(dir, "_layout.pluggy");
