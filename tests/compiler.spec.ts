@@ -363,4 +363,24 @@ describe("codegen: buildProps()", () => {
     expect(str.includes("{;")).toBe(false);
     expect(str.includes("; ")).toBe(false);
   });
+
+  it("handles nested braces in expression attributes", () => {
+    // attribute value with nested `{}` pairs
+    const src = `<div data={{ id: user.id, name: { first: 'x' } }}>`;
+    const tokens = tokenize(src);
+
+    // confirm we got tagOpen -> attrName + attrValue (single pair, not truncated)
+    const attrNames = tokens.filter((t) => t.type === "attrName");
+    const attrVals = tokens.filter((t) => t.type === "attrValue");
+
+    expect(attrNames).toEqual([{ type: "attrName", name: "data" }]);
+    expect(attrVals.length).toBe(1);
+    expect(attrVals[0]!.value).toBe("{ id: user.id, name: { first: 'x' } }");
+  });
+
+  it("combines text and expression into template literal", () => {
+    expect(compile(`<p>Testing user {params.id}</p>`)).toBe(
+      'h("p", {}, `Testing user ${params.id}`)',
+    );
+  });
 });

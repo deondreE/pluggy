@@ -48,9 +48,8 @@ export function generate(nodes: Node[]): string {
         const children = n.children.map(gen).filter(Boolean).join(", ");
         const hasChildren = children.length > 0;
         const first = n.tag.charCodeAt(0);
-        const isComponent = first >= 65 && first <= 90; // uppercase
+        const isComponent = first >= 65 && first <= 90;
         const tagExpr = isComponent ? n.tag : JSON.stringify(n.tag);
-
         return hasChildren
           ? `h(${tagExpr}, ${props}, ${children})`
           : `h(${tagExpr}, ${props})`;

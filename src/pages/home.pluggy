@@ -1,0 +1,23 @@
+import {
+  signal,
+  effect,
+  h,
+  store,
+  computed,
+  batch,
+  each,
+  resource,
+  mountApp,
+  transition,
+} from '/src/runtime';
+
+
+export function Home () {
+    return (
+        <div>
+            <p style="font-size: x-larger; color: red;">
+            Testing Home Content. 
+            </p>
+        </div>
+    );
+}

@@ -1,0 +1,16 @@
+import {
+  signal,
+  effect,
+  h,
+  store,
+  computed,
+  batch,
+  each,
+  resource,
+  mountApp,
+  transition,
+} from '/src/runtime';
+
+export function User({ params }) {
+  return <p>{params.id}</p>
+}

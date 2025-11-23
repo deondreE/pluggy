@@ -1,21 +1,17 @@
 import {
-  signal,
-  effect,
-  h,
-  store,
-  computed,
-  batch,
-  each,
-  resource,
-  mountApp,
-  transition,
-} from './runtime';
-
-export function Button () {
-    return (
-        <button>Testing this button</button>
-    );
-}
+                signal,
+                effect,
+                h,
+                store,
+                computed,
+                batch,
+                each,
+                resource,
+                mountApp,
+                transition,
+                navigate,
+                createApp,
+            } from "/src/runtime";
 
 export function App() {
   const disabled = signal(false);
@@ -60,10 +56,6 @@ export function App() {
     console.log('Disabled:', disabled());
   };
 
-  const toggle1 = () => {
-    visible.set(!visible());
-  };
-
   const todos = signal([
     { id: 1, text: 'Buy groceries' },
     { id: 2, text: 'Work out' },
@@ -74,15 +66,15 @@ export function App() {
     todos.set(next);
   };
   const removeTodo = (id) => {
+  console.log("remove");
     todos.set(todos().filter((t) => t.id !== id));
   };
 
   return (
     <div class="app" style="font-family:sans-serif; padding:1rem;">
-    <Button />
       <h1 style="margin-bottom:0.5rem;">Pluggy Demo</h1>
       <section style="margin-bottom:1.5rem;">
-        <button disabled={disabled}>Click Me</button>
+        <button disabled={disabled()}>Click Me</button>
         <button onClick={toggleDisabled}>
           Toggle (current {String(disabled())})
         </button>
@@ -111,7 +103,6 @@ export function App() {
         </div>
       </section>
 
-
       <section>
         <h2>Pokémon Resource</h2>
         <p>{data}</p>
@@ -120,21 +111,21 @@ export function App() {
       <div style="font-family:sans-serif; padding:1rem;">
         <h1>Todo List ({todoCount})</h1>
         <button onClick={addTodo}>+ Add Todo</button>
-        
+
         <ul style="margin-top:1rem;">
-            {each(todos, (item) => (
+          {each(todos, (item) => (
             <li>
-                {() => item().text}
+              {() => item().text}
                 <button
-                onClick={() => removeTodo(item().id)}
-                style="margin-left:0.5rem;"
+                    on:click={() => removeTodo(item().id)}
+                    style="margin-left:0.5rem;"
                 >
-                🗑
+                    🗑
                 </button>
             </li>
-            ))}
+          ))}
         </ul>
-        </div>
+      </div>
     </div>
   );
 }

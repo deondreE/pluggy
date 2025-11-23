@@ -8,26 +8,21 @@ export interface CompileOptions {
   name?: string;
 }
 
-/**
- * Pluggy compiler
- * ---------------
- * • Handles several components per file
- * • Supports `return <x>` / `return (<x>)`
- * • Supports arrow‑function components (`const C = () => <div/>`)
- * • Cleans extraneous semicolons
- */
 export function compile(
   template: string,
   options: CompileOptions = {},
 ): string {
-  const { wrap = false, name = "App" } = options;
+  const { wrap = false } = options;
+  let name = (options.name ?? "App")
+    .replace(/\[|\]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "");
 
   try {
-    // Turn: const X = () => <div/>  →  const X = () => { return <div/>; }
     const arrowPattern = /([=]\s*\(\s*\)|=\s*)=>\s*(<[\s\S]*?>)(?=[;\n])/gm;
-    template = template.replace(arrowPattern, (_, before, jsx) => {
-      return `${before}=> { return ${jsx}; }`;
-    });
+    template = template.replace(
+      arrowPattern,
+      (_, b, jsx) => `${b}=>{return${jsx};}`,
+    );
 
     let out = "";
     let i = 0;
@@ -39,49 +34,41 @@ export function compile(
         out += template.slice(i);
         break;
       }
-
       out += template.slice(i, idx);
       i = idx + 6;
-
-      // skip whitespace
       while (i < len && /\s/.test(template[i]!)) i++;
 
       let jsx = "";
-
-      // return ( <div> ... </div> )
       if (template[i] === "(") {
-        let depth = 1;
+        let d = 1;
         i++;
-        const start = i;
-        while (i < len && depth > 0) {
-          const ch = template[i]!;
-          if (ch === "(") depth++;
-          else if (ch === ")") depth--;
+        const s = i;
+        while (i < len && d > 0) {
+          const c = template[i]!;
+          if (c === "(") d++;
+          else if (c === ")") d--;
           i++;
         }
-        jsx = template.slice(start, i - 1).trim();
-      }
-      // return <div> ... </div>;
-      else if (template[i] === "<") {
-        const start = i;
-        let depth = 0;
+        jsx = template.slice(s, i - 1).trim();
+      } else if (template[i] === "<") {
+        const s = i;
+        let d = 0;
         while (i < len) {
-          const ch = template[i]!;
-          if (ch === "<" && template[i + 1] !== "/") depth++;
-          else if (ch === "<" && template[i + 1] === "/") depth--;
-          if (depth <= 0 && ch === ">" && template[i + 1] === ";") {
+          const c = template[i]!;
+          if (c === "<" && template[i + 1] !== "/") d++;
+          else if (c === "<" && template[i + 1] === "/") d--;
+          if (d <= 0 && c === ">" && template[i + 1] === ";") {
             i++;
             break;
           }
           i++;
         }
-        jsx = template.slice(start, i).trim();
+        jsx = template.slice(s, i).trim();
       } else {
         out += "return ";
         continue;
       }
 
-      // --- compile the captured JSX fragment ---
       const tokens = tokenize(jsx);
       const ast = parse(tokens);
       const optimized = optimize(ast);
@@ -89,19 +76,17 @@ export function compile(
       out += `return ${expr};`;
     }
 
-    let output = out;
-
-    const isComponentFile =
-      /\bexport\s+(function|const|let)\s+[A-Z]/.test(template) ||
-      /\bimport\s+[{*]/.test(template);
-
-    output = output
+    let output = out
       .replace(/;;+/g, ";")
       .replace(/([)])(})/g, "$1;$2")
       .replace(/;(\s*if\s*\()/g, "$1")
       .trim();
 
-    if (!isComponentFile) {
+    const isComp =
+      /\bexport\s+(function|const|let)\s+[A-Z]/.test(template) ||
+      /\bimport\s+[{*]/.test(template);
+
+    if (!isComp) {
       const tokens = tokenize(template);
       const ast = parse(tokens);
       const optimized = optimize(ast);
@@ -110,13 +95,15 @@ export function compile(
     }
 
     if (!/mountApp\s*\(/.test(output)) {
-      const needsDefault = !/\bexport\s+default\s+[A-Z]/.test(output);
+      const match = output.match(/\bexport\s+function\s+([A-Z]\w*)/);
+      const comp = match ? match[1] : name;
+      const defaultExists = /\bexport\s+default\s+[A-Z]/.test(output);
       const footer = `
-if (typeof document !== "undefined") {
-  const el = document.getElementById("app");
-  if (el) mountApp(App, el);
+if (typeof document!=="undefined"){
+  const el=document.getElementById("app")
+  if(el)mountApp(${comp},el)
 }
-${needsDefault ? `export default App;` : ""}
+${defaultExists ? "" : `export default ${comp};`}
 `;
       output = output.trimEnd() + "\n" + footer;
     }
@@ -125,32 +112,30 @@ ${needsDefault ? `export default App;` : ""}
   } catch (err) {
     console.error("[compile] error:", err);
     const safe = template.replace(/"/g, '\\"').replace(/\r?\n/g, "\\n");
-    return `h("pre", null, "${safe}")`;
+    return `h("pre",null,"${safe}")`;
   }
 }
 
-// helper for plain templates
 function wrapComponent(expr: string, name: string): string {
-  const header = `import {
-  h,
-  mountApp,
-  signal,
-  effect,
-  store,
-  computed,
-  batch,
-  resource,
-  transition
-} from './runtime';\n`;
+  const header = `import{
+h,
+mountApp,
+signal,
+effect,
+store,
+computed,
+batch,
+resource,
+transition
+}from'./runtime';\n`;
 
   return `${header}
-export function ${name}() {
+export function ${name}(){
   return ${expr};
 }
-
-if (typeof document !== "undefined") {
-  const el = document.getElementById("app");
-  if (el) mountApp(${name}, el);
+if(typeof document!=="undefined"){
+  const el=document.getElementById("app");
+  if(el)mountApp(${name},el);
 }
 export default ${name};`;
 }

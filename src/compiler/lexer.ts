@@ -13,8 +13,9 @@ export interface Token {
 }
 
 /**
- * Lightweight JSX tokenizer for Pluggy.
- * - Handles nested tags, self-closing, `{expr}` braces, and attributes.
+ * Robust JSX‑like tokenizer for Pluggy.
+ * ✔ Handles nested {expr}, self‑closing tags, quoted or bare attributes
+ * ✔ Correctly tokenizes boolean attrs and avoids duplicates
  */
 export function tokenize(src: string): Token[] {
   const out: Token[] = [];
@@ -22,8 +23,10 @@ export function tokenize(src: string): Token[] {
   let i = 0;
   let braceDepth = 0;
 
-  const eat = (n = 1) => (i += n);
   const peek = () => src[i];
+  const eat = (n = 1) => (i += n);
+  const nextIsAlpha = () => /[A-Za-z]/.test(src[i + 1] || "");
+
   const readWhile = (re: RegExp) => {
     const s = i;
     while (i < len && re.test(src[i]!)) i++;
@@ -33,7 +36,7 @@ export function tokenize(src: string): Token[] {
   while (i < len) {
     const ch = peek();
 
-    /* ---------- { expressions } ---------- */
+    /* ----- { curly expressions } ----- */
     if (ch === "{") {
       out.push({ type: "exprOpen" });
       braceDepth++;
@@ -42,94 +45,97 @@ export function tokenize(src: string): Token[] {
     }
 
     if (ch === "}" && braceDepth > 0) {
-      out.push({ type: "exprClose" });
       braceDepth--;
       eat();
+      out.push({ type: "exprClose" });
       continue;
     }
 
-    /* ---------- closing tag </div> ---------- */
+    /* ----- closing tag </div> ----- */
     if (ch === "<" && src[i + 1] === "/") {
       i += 2;
       const name = readWhile(/[A-Za-z0-9:_-]/);
-      // eat optional spaces & '>'
       while (i < len && /\s/.test(peek()!)) eat();
       if (peek() === ">") eat();
       out.push({ type: "tagClose", name });
       continue;
     }
 
-    /* ---------- opening tag <Div> or <div> ---------- */
-    if (ch === "<" && /[A-Za-z]/.test(src[i + 1] || "")) {
-      eat(); // '<'
+    /* ----- opening tag <div> / <Comp> ----- */
+    if (ch === "<" && nextIsAlpha()) {
+      eat(); // eat '<'
       const tag = readWhile(/[A-Za-z0-9:_-]/);
       out.push({ type: "tagOpen", name: tag });
 
-      /* --- attributes --- */
+      // parse attributes (until > or />)
       while (i < len) {
+        // skip whitespace
+        while (i < len && /\s/.test(peek()!)) eat();
         const c = peek();
-        if (c === ">" || c === "/") break;
-        if (/\s/.test(c!)) {
-          eat();
-          continue;
-        }
+        if (!c || c === ">" || c === "/") break;
 
         const attrName = readWhile(/[A-Za-z0-9:_-]/);
         if (!attrName) {
           eat();
           continue;
         }
-        out.push({ type: "attrName", name: attrName });
 
+        let val: string | null = null;
+
+        // assignment
         if (peek() === "=") {
-          eat();
+          eat(); // '='
 
-          // quoted "..."
+          // quoted value
           if (peek() === '"' || peek() === "'") {
-            const q = peek();
+            const quote = peek();
             eat();
-            const s = i;
-            while (i < len && peek() !== q) eat();
-            const val = src.slice(s, i);
-            if (peek() === q) eat();
+            const start = i;
+            while (i < len && peek() !== quote) eat();
+            val = src.slice(start, i);
+            if (peek() === quote) eat();
+            out.push({ type: "attrName", name: attrName });
             out.push({ type: "attrValue", value: val });
             continue;
           }
 
-          // braced expression { ... }
+          // braced expression value
           if (peek() === "{") {
-            eat();
+            eat(); // eat '{'
             let depth = 1;
-            const s = i;
+            const start = i;
             while (i < len && depth > 0) {
               const c2 = peek();
               if (c2 === "{") depth++;
-              else if (c2 === "}") {
-                depth--;
-                if (depth === 0) break;
-              }
+              else if (c2 === "}") depth--;
               eat();
             }
-            const val = src.slice(s, i).trim();
-            if (peek() === "}") eat();
-            out.push({ type: "attrValue", value: val });
+            const valExpr = src.slice(start, i - 1).trim();
+            out.push({ type: "attrName", name: attrName });
+            out.push({ type: "attrValue", value: valExpr });
+            if (peek() === "}") eat(); // consume closing brace
             continue;
           }
 
-          // bareword attr
-          const val = readWhile(/[^\s>]/);
+          // bareword
+          const start = i;
+          while (i < len && /[^\s>]/.test(peek()!)) eat();
+          val = src.slice(start, i);
+          out.push({ type: "attrName", name: attrName });
           out.push({ type: "attrValue", value: val });
           continue;
         }
 
-        // boolean attr
+        // boolean attribute (no value)
         out.push({ type: "attrName", name: attrName });
       }
 
-      // self-closing tag
+      // self‑closing tag
+      while (i < len && /\s/.test(peek()!)) eat();
       if (peek() === "/") {
         eat();
         if (peek() === ">") eat();
+        // emit closing mirror for self‑closing
         out.push({ type: "tagClose", name: tag });
         continue;
       }
@@ -138,10 +144,10 @@ export function tokenize(src: string): Token[] {
       continue;
     }
 
-    /* ---------- plain text ---------- */
-    const s = i;
+    /* ----- text node ----- */
+    const start = i;
     while (i < len && !["<", "{", "}"].includes(peek()!)) eat();
-    const val = src.slice(s, i);
+    const val = src.slice(start, i);
     if (val) out.push({ type: "text", value: val });
   }
 
