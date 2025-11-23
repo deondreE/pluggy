@@ -50,11 +50,13 @@ export default ${name}`;
         const rel = path.relative(pagesDir, abs).replace(/\\/g, "/");
         const url = makeUrl(rel);
         const layout = findLayout(pagesDir, abs);
+        const server = findServer(pagesDir, abs);
         const importPath = "/src/pages/" + rel;
         return `{
   path:"${url}",
   component:()=>import("${importPath}"),
   layout:${layout ? `"${layout}"` : "null"},
+  server:${server ? `"${server}"` : "null"},
   meta:async()=>{const m=await import("${importPath}");return{title:m.title??null,description:m.description??null}}
 }`;
       });
@@ -106,6 +108,16 @@ function findLayout(root: string, abs: string) {
   let dir = path.dirname(abs);
   while (dir.startsWith(root)) {
     const f = path.join(dir, "_layout.pluggy");
+    if (fs.existsSync(f)) return path.relative(root, f).replace(/\\/g, "/");
+    dir = path.dirname(dir);
+  }
+  return null;
+}
+
+function findServer(root: string, abs: string) {
+  let dir = path.dirname(abs);
+  while (dir.startsWith(root)) {
+    const f = path.join(dir, "+server.ts");
     if (fs.existsSync(f)) return path.relative(root, f).replace(/\\/g, "/");
     dir = path.dirname(dir);
   }
