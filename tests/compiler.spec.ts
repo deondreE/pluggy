@@ -7,12 +7,13 @@ import { generate } from "../src/compiler/codegen";
 import { compile } from "../src/compiler";
 import type { Node } from "../src/compiler/parser";
 
+const normalize = (s: string) => s.replace(/\s+/g, "").trim();
+
 /* ───────────────────────── LEXER ───────────────────────── */
-describe("lexer: tokenize", () => {
+describe("lexer: tokenize()", () => {
   it("tokenizes nested tags and expressions", () => {
     const src = `<div class="map"><h1>{msg}</h1><p>Hello</p></div>`;
     const tokens = tokenize(src);
-
     expect(tokens.map((t) => t.type)).toEqual([
       "tagOpen",
       "attrName",
@@ -45,7 +46,6 @@ describe("lexer: tokenize", () => {
     const tokens = tokenize(src);
     const attrNames = tokens.filter((x) => x.type === "attrName");
     const attrValues = tokens.filter((x) => x.type === "attrValue");
-
     expect(attrNames.some((x) => (x as any).name === "value")).toBe(true);
     expect(attrValues.some((x) => (x as any).value === "count")).toBe(true);
   });
@@ -53,8 +53,9 @@ describe("lexer: tokenize", () => {
   it("handles bare attributes", () => {
     const src = `<button disabled>`;
     const tokens = tokenize(src);
-    const attr = tokens.find((t) => t.type === "attrName");
-    expect(attr).toMatchObject({ name: "disabled" });
+    expect(tokens.find((t) => t.type === "attrName")).toMatchObject({
+      name: "disabled",
+    });
   });
 
   it("handles self-closing tags", () => {
@@ -66,7 +67,7 @@ describe("lexer: tokenize", () => {
 });
 
 /* ───────────────────────── PARSER ───────────────────────── */
-describe("parser: parse", () => {
+describe("parser: parse()", () => {
   it("builds correct AST for nested structure", () => {
     const ast = parse(tokenize(`<div><h1>{msg}</h1><p>Hi</p></div>`));
     expect(ast).toEqual([
@@ -93,7 +94,6 @@ describe("parser: parse", () => {
   });
 
   it("parses attributes with string and expression values", () => {
-    // note: expression value stored as 'count' (no braces)
     const ast = parse(tokenize(`<input value={count} id="x" disabled>`));
     expect(ast).toEqual([
       {
@@ -105,14 +105,13 @@ describe("parser: parse", () => {
     ]);
   });
 
-  it("parses self-closing element", () => {
-    const ast = parse(tokenize(`<br/>`));
-    expect(ast).toEqual([
+  it("parses self-closing elements", () => {
+    expect(parse(tokenize(`<br/>`))).toEqual([
       { type: "Element", tag: "br", attrs: {}, children: [] },
     ]);
   });
 
-  it("parses text + expression mix correctly", () => {
+  it("handles text + expression mix", () => {
     const ast = parse(tokenize(`<span>Hello {user.name + "!"}</span>`));
     expect(ast[0].children).toEqual([
       { type: "Text", value: "Hello " },
@@ -169,7 +168,7 @@ describe("optimizer", () => {
 });
 
 /* ───────────────────────── CODEGEN ───────────────────────── */
-describe("codegen: generate", () => {
+describe("codegen: generate()", () => {
   it("turns text node into string literal", () => {
     expect(generate([{ type: "Text", value: "Hello" }])).toBe('"Hello"');
   });
@@ -237,22 +236,23 @@ describe("codegen: generate", () => {
 /* ───────────────────────── INTEGRATION ───────────────────────── */
 describe("integration", () => {
   it("compiles small Pluggy component", () => {
-    const code = compile(
-      `<div class="map"><h1>{msg}</h1><p>Rendered!</p></div>`,
-    );
-    expect(code).toBe(
+    expect(
+      compile(`<div class="map"><h1>{msg}</h1><p>Rendered!</p></div>`),
+    ).toBe(
       'h("div", {"class":"map"}, h("h1", {}, (msg)), h("p", {}, "Rendered!"))',
     );
   });
 
   it("supports expression + bare attributes", () => {
-    const code = compile(`<input value={count} disabled>`);
-    expect(code).toBe('h("input", {"value":"count","disabled":null})');
+    expect(compile(`<input value={count} disabled>`)).toBe(
+      'h("input", {"value":"count","disabled":null})',
+    );
   });
 
   it("renders multi-root templates as arrays", () => {
-    const code = compile(`<p>A</p><p>B</p>`);
-    expect(code).toBe('[h("p", {}, "A"), h("p", {}, "B")]');
+    expect(compile(`<p>A</p><p>B</p>`)).toBe(
+      '[h("p", {}, "A"), h("p", {}, "B")]',
+    );
   });
 
   it("handles each() loop expressions", () => {
@@ -265,24 +265,17 @@ describe("integration", () => {
   });
 
   it("compiles uppercase tags as components", () => {
-    const code = compile(
-      `<MyButton label="Save" onClick={handleSave}>Click me</MyButton>`,
-    );
-    expect(code).toBe(
-      'h(MyButton, {"label":"Save","onClick":handleSave}, "Click me")',
-    );
+    expect(
+      compile(
+        `<MyButton label="Save" onClick={handleSave}>Click me</MyButton>`,
+      ),
+    ).toBe('h(MyButton, {"label":"Save","onClick":handleSave}, "Click me")');
   });
 
-  it("compiles multiple components defined in one file correctly", () => {
+  it("compiles multiple components defined in one file", () => {
     const src = `
-export function Header() {
-  return <h1>Header</h1>;
-}
-
-export function Footer() {
-  return <footer>Footer</footer>;
-}
-
+export function Header() { return <h1>Header</h1>; }
+export function Footer() { return <footer>Footer</footer>; }
 export function App() {
   return (
     <div>
@@ -292,70 +285,32 @@ export function App() {
   );
 }`;
     const code = compile(src);
-
-    // full expected code output (without footer mount)
-    const expected = `
-export function Header() {
-  return h("h1", {}, "Header");
-}
-
-export function Footer() {
-  return h("footer", {}, "Footer");
-}
-
-export function App() {
-  return h("div", {}, h(Header, {}), h(Footer, {}));
-}
-`;
-
-    expect(code.trim()).toContain("export function Header");
-    expect(code.trim()).toContain("export function Footer");
-    expect(code.trim()).toContain("export function App");
-    expect(code.trim()).toContain("h(Header");
-    expect(code.trim()).toContain("h(Footer");
-
-    // stronger equality after normalizing whitespace
-    const normalize = (s: string) => s.replace(/\s+/g, "").trim();
-    expect(normalize(code)).toContain(normalize(expected));
+    const expected = normalize(`
+export function Header(){return h("h1", {}, "Header");}
+export function Footer(){return h("footer", {}, "Footer");}
+export function App(){return h("div", {}, h(Header, {}), h(Footer, {}));}
+`);
+    expect(normalize(code)).toContain(expected);
   });
 
-  it("compiles imported components and nested content properly", () => {
+  it("compiles imported components and nested content", () => {
     const src = `
 import { Header, Footer } from './layout.pluggy';
-
 export function App() {
   return (
     <div>
-      <Header />
-      <main>
-        <p>Inside main body.</p>
-      </main>
-      <Footer />
+      <Header/>
+      <main><p>Inside main body.</p></main>
+      <Footer/>
     </div>
   );
 }`;
     const code = compile(src);
-
-    const expected = `
+    const expected = normalize(`
 import { Header, Footer } from './layout.pluggy';
-
-export function App() {
-  return h("div", {}, 
-    h(Header, {}), 
-    h("main", {}, h("p", {}, "Inside main body.")), 
-    h(Footer, {})
-  );
-}
-`;
-
-    const normalize = (s: string) => s.replace(/\s+/g, "").trim();
-
-    // Confirm import preserved and JSX converted to h() calls
-    expect(code).toContain("import { Header, Footer } from");
-    expect(code).toContain("h(Header");
-    expect(code).toContain("h(Footer");
-    expect(code).toContain('h("p", {}, "Inside main body.")');
-    expect(normalize(code)).toContain(normalize(expected));
+export function App(){return h("div", {}, h(Header, {}), h("main", {}, h("p", {}, "Inside main body.")), h(Footer, {}));}
+`);
+    expect(normalize(code)).toContain(expected);
   });
 
   it("compiles components that render children via {children}", () => {
@@ -363,7 +318,6 @@ export function App() {
 export function Panel({ children }) {
   return <section class="panel">{children}</section>;
 }
-
 export function App() {
   return (
     <Panel>
@@ -372,18 +326,41 @@ export function App() {
   );
 }`;
     const code = compile(src);
+    const expected = normalize(`
+export function Panel({ children }){return h("section", {"class":"panel"}, children);}
+export function App(){return h(Panel, {}, h("p", {}, "Inside panel"));}
+`);
+    expect(normalize(code)).toContain(expected);
+  });
+});
 
-    const expected = `
-export function Panel({ children }) {
-  return h("section", {"class":"panel"}, children);
-}
+/* ───────────────────────── codegen: buildProps ───────────────────────── */
+const wrap = (attrs: Record<string, string | null>) =>
+  generate([{ type: "Element", tag: "x", attrs, children: [] } as Node]);
 
-export function App() {
-  return h(Panel, {}, h("p", {}, "Inside panel"));
-}
-`;
+describe("codegen: buildProps()", () => {
+  it("handles every attribute type cleanly", () => {
+    const src = wrap({
+      id: "root",
+      onClick: "submit",
+      value: "{count}",
+      disabled: null,
+    });
+    expect(src).toBe(
+      'h("x", {"id":"root","onClick":submit,"value":count,"disabled":null})',
+    );
+  });
 
-    const normalize = (s: string) => s.replace(/\s+/g, "").trim();
-    expect(normalize(code)).toContain(normalize(expected));
+  it("has no stray semicolons", () => {
+    const code = wrap({ id: "abc" });
+    expect(code.includes("{;") || code.includes(";")).toBe(false);
+  });
+
+  it("has no stray semicolons in props", () => {
+    const str = generate([
+      { type: "Element", tag: "x", attrs: { id: "abc" }, children: [] },
+    ]);
+    expect(str.includes("{;")).toBe(false);
+    expect(str.includes("; ")).toBe(false);
   });
 });

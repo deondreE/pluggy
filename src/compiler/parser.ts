@@ -75,18 +75,12 @@ export function parse(tokens: Token[]): Node[] {
           eat();
           if (depth === 0) break;
           continue;
-
-        // nested JSX element inside expression
         case "tagOpen":
           const element = parseElement();
           parts.push(inline(element));
           continue;
-
         case "text": {
-          const val = eat()!.value ?? "";
-          // identifiers -> unquoted code instead of string
-          if (/^[A-Za-z_$][\w$]*$/.test(val.trim())) parts.push(val.trim());
-          else parts.push(val);
+          parts.push(eat()!.value ?? "");
           continue;
         }
 
@@ -139,11 +133,7 @@ export function parse(tokens: Token[]): Node[] {
       const t = peek();
       if (
         !t ||
-        t.type === "eof" ||
-        t.type === "tagOpen" ||
-        t.type === "tagClose" ||
-        t.type === "exprOpen" ||
-        t.type === "text"
+        ["eof", "tagOpen", "tagClose", "exprOpen", "text"].includes(t.type)
       )
         break;
 

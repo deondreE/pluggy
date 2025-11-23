@@ -2,8 +2,7 @@ import type { Node } from "./parser";
 
 /**
  * Convert Pluggy AST → JavaScript h() calls.
- * Produces clean deterministic code
- * matching Pluggy's integration test expectations exactly.
+ * Deterministic output that matches integration tests exactly.
  */
 export function generate(nodes: Node[]): string {
   const parts: string[] = [];
@@ -14,13 +13,11 @@ export function generate(nodes: Node[]): string {
 
   if (parts.length === 0) return "null";
   if (parts.length === 1) return parts[0]!;
-  return "[" + parts.join(", ") + "]";
+  return `[${parts.join(", ")}]`;
 
-  /* ---------- Internal helpers ---------- */
   function gen(n: Node): string {
     switch (n.type) {
       case "Text": {
-        // Collapse consecutive whitespace
         let v = n.value.replace(/\s+/g, " ");
         if (n.value.length && n.value.charCodeAt(0) <= 0x20 && v[0] !== " ")
           v = " " + v;
@@ -37,23 +34,25 @@ export function generate(nodes: Node[]): string {
 
       case "Expression": {
         const c = n.code.trim();
-        // Always wrap non-empty code for direct expression nodes
-        // e.g. <p>{msg}</p> => (msg)
-        // but if it's already parenthesized, leave as-is
         if (!c) return "";
+
+        if (c === "children") return c;
+
+        // if (/^[A-Za-z_$][\w$]*$/.test(c)) return c;
         if (/^\(.*\)$/.test(c)) return c;
-        return "(" + c + ")";
+        return `(${c})`;
       }
 
       case "Element": {
-        const props = buildProps(n.attrs ?? {});
-        const childStr = n.children.map(gen).filter(Boolean).join(", ");
-        const hasChildren = !!childStr.length;
+        const props = buildProps(n.attrs || {});
+        const children = n.children.map(gen).filter(Boolean).join(", ");
+        const hasChildren = children.length > 0;
         const first = n.tag.charCodeAt(0);
-        const isComponent = first >= 65 && first <= 90; // upper-case first letter
+        const isComponent = first >= 65 && first <= 90; // uppercase
         const tagExpr = isComponent ? n.tag : JSON.stringify(n.tag);
+
         return hasChildren
-          ? `h(${tagExpr}, ${props}, ${childStr})`
+          ? `h(${tagExpr}, ${props}, ${children})`
           : `h(${tagExpr}, ${props})`;
       }
 
@@ -62,15 +61,21 @@ export function generate(nodes: Node[]): string {
     }
   }
 
+  /**
+   * Builds a props object expression.
+   * Ensures values are comma‑separated (never semicolon).
+   */
   function buildProps(attrs: Record<string, string | null>): string {
     const keys = Object.keys(attrs);
     if (!keys.length) return "{}";
+
     const out: string[] = [];
 
     for (const key of keys) {
       const raw = attrs[key];
       const val = raw == null || raw === "" ? null : raw;
 
+      // Boolean attribute (present with no value)
       if (val === null) {
         out.push(`"${key}":null`);
         continue;
@@ -79,14 +84,12 @@ export function generate(nodes: Node[]): string {
       const first = val.charCodeAt(0);
       const last = val.charCodeAt(val.length - 1);
 
-      // {expr}
+      // {expr}  →  expression value
       if (first === 123 && last === 125 && val.length > 1) {
-        // inside attr braces we don’t double-wrap
         out.push(`"${key}":${val.slice(1, -1).trim()}`);
         continue;
       }
 
-      // Events: onClick, on:foo, etc.
       if (
         key.startsWith("on") ||
         (key.length > 3 && key[2] === ":") ||
@@ -99,6 +102,7 @@ export function generate(nodes: Node[]): string {
       out.push(`"${key}":${JSON.stringify(val)}`);
     }
 
-    return `{${out.join(",")}}`;
+    const joined = out.filter(Boolean).join(",");
+    return `{${joined}}`;
   }
 }

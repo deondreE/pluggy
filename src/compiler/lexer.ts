@@ -84,7 +84,7 @@ export function tokenize(src: string): Token[] {
         if (peek() === "=") {
           eat();
 
-          // quoted string
+          // quoted "..."
           if (peek() === '"' || peek() === "'") {
             const q = peek();
             eat();

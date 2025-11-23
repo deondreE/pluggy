@@ -10,6 +10,13 @@ import {
   mountApp,
   transition,
 } from './runtime';
+
+export function Button () {
+    return (
+        <button>Testing this button</button>
+    );
+}
+
 export function App() {
   const disabled = signal(false);
 
@@ -72,6 +79,7 @@ export function App() {
 
   return (
     <div class="app" style="font-family:sans-serif; padding:1rem;">
+    <Button />
       <h1 style="margin-bottom:0.5rem;">Pluggy Demo</h1>
       <section style="margin-bottom:1.5rem;">
         <button disabled={disabled}>Click Me</button>
