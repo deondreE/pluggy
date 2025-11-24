@@ -16,3 +16,10 @@ export function stripPluggyImports(code: string): string {
     ""
   );
 }
+
+export function stripCssImports(code: string): string {
+  return code.replace(
+    /\s*import\s+(?:[^'"]+\s+from\s+)?["'][^"']+\.(?:css|scss|sass|less|postcss)["']\s*;?/g,
+    ""
+  );
+}

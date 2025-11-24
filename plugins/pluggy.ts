@@ -3,6 +3,7 @@ import { compile } from "../src/compiler";
 import {
   extractPluggyImports,
   stripPluggyImports,
+  stripCssImports,
 } from "../src/compiler/utils";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -39,16 +40,14 @@ export default function pluggy(): Plugin {
       const isComp = /\bexport\s+function\s+[A-Z]/.test(src);
 
       const pluggyImports = extractPluggyImports(src);
-      const stripped = stripPluggyImports(source);
+
+      // Clean up pluggy + CSS imports before compiling
+      const cleaned = stripCssImports(stripPluggyImports(source));
 
       let js: string;
-
       try {
-        // Step 1: compile current file
-        js = compile(stripped.trim(), { wrap: !isComp, name, isPage });
-        stripPluggyImports(js);
+        js = compile(cleaned.trim(), { wrap: !isComp, name, isPage });
 
-        // Step 2: recursively inline any imported `.pluggy` components
         if (isPage && pluggyImports.length) {
           let combined = "";
           for (const imp of pluggyImports) {
@@ -56,7 +55,7 @@ export default function pluggy(): Plugin {
             const code = fs.readFileSync(abs, "utf-8");
             const compName = makeName(path.basename(abs, ".pluggy"));
 
-            const compJs = compile(code, {
+            const compJs = compile(stripCssImports(stripPluggyImports(code)), {
               wrap: false,
               name: compName,
               isPage: false,
@@ -64,13 +63,10 @@ export default function pluggy(): Plugin {
 
             combined += `\n// inlined: ${imp}\n${compJs}\n`;
           }
-
-          // Prepend components above the main page code
           js = combined + "\n" + js;
         }
       } catch (err) {
         console.error("[pluggy] compile error:", err);
-        // fallback: emit a basic component for runtime visibility
         js = `import { h } from './runtime';
 export function ${name}(){
   return h('div',null,'❌ compile error')
@@ -82,7 +78,7 @@ export default ${name};`;
       if (!fs.existsSync(out)) fs.mkdirSync(out, { recursive: true });
       fs.writeFileSync(
         path.join(out, createHash("md5").update(id).digest("hex") + ".js"),
-        js,
+        js
       );
 
       return { code: js, map: null };
@@ -113,8 +109,11 @@ export default ${name};`;
         const layout = findLayout(pagesDir, abs);
         const server = findServer(pagesDir, abs);
         const importPath = "/src/pages/" + rel;
+        const css = extractCssImports(fs.readFileSync(abs, "utf-8"), abs);
+
         return `{
   path:"${url}",
+  styles: ${JSON.stringify(css)},
   component:()=>import("${importPath}"),
   layout:${layout ? `"${layout}"` : "null"},
   server:${server ? `"${server}"` : "null"},
@@ -143,7 +142,6 @@ export default ${name};`;
     },
   };
 }
-
 
 /** Collect all page files recursively under a directory */
 function flatFiles(dir: string, out: string[] = []): string[] {
@@ -197,4 +195,16 @@ function findServer(root: string, abs: string) {
     dir = path.dirname(dir);
   }
   return null;
+}
+
+function extractCssImports(src: string, id: string) {
+  const cssRegex =
+    /\s*import\s+(?:[^'"]+\s+from\s+)?["']([^"']+\.(?:css|scss|sass|less|postcss))["']\s*;?/g;
+
+  const matches = [...src.matchAll(cssRegex)];
+  return matches.map((m) =>
+    path
+      .relative(process.cwd(), path.resolve(path.dirname(id), m[1]!))
+      .replace(/\\/g, "/")
+  );
 }

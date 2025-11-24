@@ -152,6 +152,7 @@ export function createApp({ routes }: { routes: any[] }) {
   const paramsSig = signal<Record<string, string>>({});
   let lastKey = "";
   const cache = new Map<string, any>();
+  const activeStlyes = new Set<string>();
 
   function matchRoute(url: string) {
     let out = cache.get(url);
@@ -181,6 +182,30 @@ export function createApp({ routes }: { routes: any[] }) {
     return null;
   }
 
+  function cleanupPageStyles() {
+    for (const id of activeStlyes) {
+      const link = document.querySelector(
+        `link[data-pluggy-style="${id}"]`
+      );
+      if (link) link.remove();
+      activeStlyes.delete(id);
+    }
+  }
+
+  function applyPageStyles(styles: string[] | undefined) {
+    if (!styles || !styles.length) return;
+    for (const styleHref of styles) {
+      const id = styleHref;
+      if (activeStlyes.has(id)) continue;
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = styleHref;
+      link.dataset.pluggyStyle = id;
+      document.head.appendChild(link);
+      activeStlyes.add(id); 
+    }
+  }
+
   function RouterView(): HTMLElement {
     const el = document.createElement("div");
     effect(() => {
@@ -197,6 +222,10 @@ export function createApp({ routes }: { routes: any[] }) {
       }
       lastKey = key;
       paramsSig.set(route.params);
+
+      cleanupPageStyles();
+      applyPageStyles(route.styles);
+
       route
         .component()
         .then((mod: any) => {

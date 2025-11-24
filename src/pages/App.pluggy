@@ -12,6 +12,7 @@ import {
     navigate,
     createApp,
 } from "/src/runtime";
+import "./app.css";
 import { Button } from "../components/btn.pluggy";
 import { Card } from "../components/card.pluggy";
 

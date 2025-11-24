@@ -1,17 +1,17 @@
 {
   "name": "pluggy-view",
   "description": "Reactive UI compiler & runtime for Pluggy",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "type": "module",
   "private": false,
-  "main": "dist/cjs/index.cjs",
-  "module": "dist/index.mjs",
-  "types": "dist/types/index.d.ts",
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/types/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/cjs/index.cjs",
-      "types": "./dist/types/index.d.ts"
+      "require": "./dist/cjs/index.cjs"
     }
   },
   "scripts": {
@@ -25,16 +25,8 @@
     "fmt:check": "oxfmt check .",
     "preview": "vite preview"
   },
-  "files": [
-    "dist"
-  ],
-  "keywords": [
-    "pluggy",
-    "view",
-    "frontend",
-    "reactive",
-    "compiler"
-  ],
+  "files": ["dist"],
+  "keywords": ["pluggy", "view", "frontend", "reactive", "compiler"],
   "devDependencies": {
     "@rollup/plugin-commonjs": "^25.0.8",
     "@rollup/plugin-node-resolve": "^15.3.0",

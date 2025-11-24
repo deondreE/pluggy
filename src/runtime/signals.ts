@@ -1,21 +1,3 @@
-export function bindText(sig: Signal<any>): Text {
-  if (typeof sig !== "function" || typeof sig.subscribe !== "function") {
-    return document.createTextNode(String(sig));
-  }
-
-  const getVal =
-    typeof sig === "function" ? (sig as () => any) : () => (sig as any).get();
-
-  const node = document.createTextNode(String(getVal()));
-
-  sig.subscribe(() => {
-    const newVal = String(getVal());
-    if (node.nodeValue !== newVal) node.nodeValue = newVal;
-  });
-
-  return node;
-}
-
 export interface Signal<T> {
   (): T;
   set(v: T): void;

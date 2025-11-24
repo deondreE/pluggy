@@ -1,16 +1,21 @@
 {
   "name": "pluggy-view-plugin",
-  "exports": {
-    ".": "./pluggy.js"
-  },
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {},
-  "keywords": [
-    "Plugin"
-  ],
+  "version": "1.0.1",
+  "description": "Plugin for Pluggy View",
   "author": "deondreE",
   "license": "MIT",
+  "type": "module",
+  "main": "./pluggy.js",
+  "exports": {
+    ".": {
+      "import": "./pluggy.js",
+      "require": "./pluggy.js"
+    }
+  },
+  "keywords": ["pluggy", "view", "plugin"],
+  "scripts": {},
+  "peerDependencies": {
+    "pluggy-view": "^0.0.2"
+  },
   "packageManager": "pnpm@10.17.0"
 }
