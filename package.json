@@ -1,7 +1,7 @@
 {
   "name": "pluggy-view",
   "description": "Reactive UI compiler & runtime for Pluggy",
-  "version": "0.0.3",
+  "version": "0.0.6",
   "type": "module",
   "private": false,
   "main": "./dist/cjs/index.cjs",

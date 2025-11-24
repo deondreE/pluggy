@@ -18,6 +18,30 @@ export type Child =
   | undefined
   | Child[];
 
+let pathSignal: Signal<string>;
+
+
+export function getPathSignal() {
+  if (typeof window === "undefined") {
+    // Node / SSR stub
+    return signal("/");
+  }
+  if (!pathSignal) {
+    pathSignal = signal(window.location.pathname);
+    window.addEventListener("popstate", () => pathSignal.set(window.location.pathname));
+  }
+  return pathSignal;
+}
+
+export const path = getPathSignal();
+
+export function navigate(to: string) {
+  if (typeof window === "undefined") return; // no‑op when not in browser
+  if (window.location.pathname === to) return;
+  history.pushState(null, "", to);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
 function isSignal(val: any): val is Signal<any> {
   return typeof val === "function" && typeof val.subscribe === "function";
 }
@@ -131,15 +155,6 @@ export function bindText(sig: Signal<any>): Text {
   const node = document.createTextNode(String(sig()));
   sig.subscribe(() => (node.nodeValue = String(sig())));
   return node;
-}
-
-export const path = signal(window.location.pathname);
-window.addEventListener("popstate", () => path.set(location.pathname));
-
-export function navigate(to: string) {
-  if (window.location.pathname === to) return;
-  history.pushState(null, "", to);
-  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 export function mountApp(app: () => HTMLElement, root: HTMLElement) {

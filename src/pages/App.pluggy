@@ -41,7 +41,6 @@ export function App() {
   const inc = () => count.set(count() + 1);
 
   effect(() => console.log('Sum changed →', sum()));
-
   const onInputChange = (e) => content.set(e.target.value);
 
   const incBothUnbatched = () => {

@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import pluggy from "./plugins/pluggy.ts";
+import pluggy from "./src/pluggy.ts";
 
 export default defineConfig({
   plugins: [pluggy()],

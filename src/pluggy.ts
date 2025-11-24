@@ -1,5 +1,5 @@
 import type { Plugin } from "vite";
-import { compile } from "../src/compiler";
+import { compile } from "./compiler";
 import {
   extractPluggyImports,
   stripPluggyImports,
