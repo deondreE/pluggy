@@ -3,24 +3,28 @@ export interface Signal<T> {
   set(v: T): void;
   subscribe(fn: () => void): () => void;
 }
-
-let running: (() => void) | null = null;
-const contextStack: Record<ContextKey, any>[] = [];
-let isBatching = false;
-const pending = new Set<() => void>();
-let activeComputed: (() => void) | null = null;
-let activeWatch: (() => void) | null = null;
-
 type ContextKey = symbol | string;
+
+// Shared global registry to ensure onlyone reactibity runtime per JS realm
+const G =
+  (globalThis as any).__pluggy_reactivity__ ??
+  ((globalThis as any).__pluggy_reactivity__ = {
+    running: null as (() => void) | null,
+    contextStack: [] as Record<ContextKey, any>[],
+    isBatching: false,
+    pending: new Set<() => void>(),
+    activeComputed: null as (() => void) | null,
+    activeWatch: null as (() => void) | null,
+  });
 
 export function signal<T>(initial: T): Signal<T> {
   let val = initial;
   const subs = new Set<() => void>();
 
   const sig = (() => {
-    if (running) subs.add(running);
-    if (activeComputed) subs.add(activeComputed);
-    if (activeWatch) subs.add(activeWatch);
+    if (G.running) subs.add(G.G.running);
+    if (G.activeComputed) subs.add(G.activeComputed);
+    if (G.activeWatch) subs.add(G.activeWatch);
     return val;
   }) as Signal<T>;
 
@@ -28,7 +32,7 @@ export function signal<T>(initial: T): Signal<T> {
     if (!Object.is(next, val)) {
       val = next;
       const runAll = () => subs.forEach((fn) => fn());
-      if (isBatching) pending.add(runAll);
+      if (G.isBatching) G.pending.add(runAll);
       else runAll();
     }
   };
@@ -42,36 +46,36 @@ export function signal<T>(initial: T): Signal<T> {
 
 export function effect(fn: () => void): () => void {
   const run = () => {
-    const prev = activeWatch;
-    activeWatch = run;
+    const prev = G.activeWatch;
+    G.activeWatch = run;
     fn();
-    activeWatch = prev;
+    G.activeWatch = prev;
   };
   run();
-  return () => (activeWatch = null);
+  return () => (G.activeWatch = null);
 }
 
 export function computed<T>(calc: () => T): Signal<T> {
   const out = signal(calc());
   const rerun = () => out.set(calc());
-  const prev = activeComputed;
-  activeComputed = rerun;
+  const prev = G.activeComputed;
+  G.activeComputed = rerun;
   calc();
-  activeComputed = prev;
+  G.activeComputed = prev;
   return out;
 }
 
 export function batch(fn: () => void) {
-  const wasBatching = isBatching;
-  isBatching = true;
+  const wasBatching = G.isBatching;
+  G.isBatching = true;
   try {
     fn();
   } finally {
-    isBatching = wasBatching;
-    if (!isBatching) {
-      const tasks = Array.from(pending);
-      pending.clear();
-      for (const f of tasks) f();
+    G.isBatching = wasBatching;
+    if (!G.isBatching) {
+      const tasks = Array.from(G.pending);
+      G.pending.clear();
+      for (const f of tasks) G.f();
     }
   }
 }
@@ -106,7 +110,7 @@ export function store<T extends object>(obj: T): T {
  */
 export function each<T extends { id?: string | number }>(
   list: Signal<T[]>,
-  render: (item: Signal<T>, index: Signal<number>) => HTMLElement | Text,
+  render: (item: Signal<T>, index: Signal<number>) => HTMLElement | Text
 ): Node[] {
   const lookup = new Map<
     string | number,
@@ -158,6 +162,7 @@ export function each<T extends { id?: string | number }>(
     // Remove missing nodes
     for (const [key, rec] of lookup) {
       if (!used.has(key)) {
+        // @ts-ignore
         if (rec.node.parentNode) rec.node.remove();
         lookup.delete(key);
       }
@@ -169,7 +174,7 @@ export function each<T extends { id?: string | number }>(
 
 export function eachKeyed<T extends { id: string | number }>(
   list: Signal<T[]>,
-  render: (item: Signal<T>, index: Signal<number>) => HTMLElement | Text,
+  render: (item: Signal<T>, index: Signal<number>) => HTMLElement | Text
 ): HTMLElement[] {
   const currentMap = new Map<
     string | number,
@@ -202,6 +207,7 @@ export function eachKeyed<T extends { id: string | number }>(
     // remove old ones that disappeared
     for (const [k, entry] of currentMap) {
       if (!visited.has(k)) {
+        // @ts-ignore
         entry.node.remove();
         currentMap.delete(k);
       }
@@ -220,16 +226,16 @@ export function eachKeyed<T extends { id: string | number }>(
  * Use inside compnents (usually wrapped in <Provider> function components).
  */
 export function provide<T>(key: ContextKey, value: T) {
-  if (contextStack.length === 0) contextStack.push({});
-  contextStack[contextStack.length - 1]![key] = value;
+  if (G.contextStack.length === 0) G.contextStack.push({});
+  G.contextStack[G.contextStack.length - 1]![key] = value;
 }
 
 /**
  * Consume a context value from the nearest ancestor provider.
  */
 export function useContext<T>(key: ContextKey): T | undefined {
-  for (let i = contextStack.length - 1; i >= 0; i--) {
-    const found = contextStack[i];
+  for (let i = G.contextStack.length - 1; i >= 0; i--) {
+    const found = G.contextStack[i];
     if (key in found!) return found![key];
   }
   return undefined;
@@ -242,11 +248,11 @@ export function useContext<T>(key: ContextKey): T | undefined {
 export function withProvider<T>(
   key: ContextKey,
   value: T,
-  render: () => HTMLElement | string,
+  render: () => HTMLElement | string
 ): HTMLElement | string {
-  contextStack.push({ [key]: value });
+  G.contextStack.push({ [key]: value });
   const el = render();
-  contextStack.pop();
+  G.contextStack.pop();
   return el;
 }
 
@@ -316,7 +322,7 @@ export const presets: Record<string, TransitionOptions> = {
 export function transition(
   el: HTMLElement,
   active: Signal<boolean>,
-  options: TransitionOptions | keyof typeof presets = "fade",
+  options: TransitionOptions | keyof typeof presets = "fade"
 ): void {
   const config =
     typeof options === "string" ? presets[options] : (options ?? presets.fade);
