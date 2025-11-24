@@ -18,17 +18,33 @@ export type Child =
   | undefined
   | Child[];
 
+function isSignal(val: any): val is Signal<any> {
+  return typeof val === "function" && typeof val.subscribe === "function";
+}
+
 export function h(tag: any, props: Props, ...children: Child[]): HTMLElement {
   if (typeof tag === "function") {
-    const merged = props ? { ...props } : {};
-    merged.children = children.flat();
+    console.log("[Pluggy:h] calling component:", tag.name);
+    const merged = { ...(props || {}) };
+
+    const flatChildren = children.flat(Infinity);
+    merged.children = flatChildren;
     const out = tag(merged);
+
+    if (Array.isArray(out)) {
+      const frag = document.createDocumentFragment();
+      out.forEach((n) => appendChildren(frag as any, [n]));
+      return frag as any;
+    }
+
     if (out instanceof Node) return out;
-    if (typeof out === "string") {
+
+    if (typeof out === "string" || typeof out === "number") {
       const span = document.createElement("span");
-      span.textContent = out;
+      span.textContent = String(out);
       return span;
     }
+
     return document.createComment("invalid component return");
   }
 
@@ -45,11 +61,9 @@ export function h(tag: any, props: Props, ...children: Child[]): HTMLElement {
         if (typeof v === "function") el.addEventListener(ev, v);
         continue;
       }
-      if (
-        typeof v === "function" &&
-        typeof (v as any).subscribe === "function"
-      ) {
-        const sig = v as Signal<any>;
+
+      // relative signal
+      if (isSignal(v)) {
         const apply = (val: any) => {
           if (typeof val === "boolean" && k in el) {
             (el as any)[k] = val;
@@ -61,42 +75,59 @@ export function h(tag: any, props: Props, ...children: Child[]): HTMLElement {
           else if (val === false) el.removeAttribute(k);
           else el.setAttribute(k, String(val));
         };
-        apply(sig());
-        sig.subscribe(() => apply(sig()));
+        apply(v());
+        v.subscribe(() => apply(v()));
         continue;
       }
+
+      // static attrs
       if (k === "class") el.className = v ?? "";
       else if (k in el) (el as any)[k] = v;
       else if (v === true) el.setAttribute(k, "");
       else if (v != null && v !== false) el.setAttribute(k, String(v));
     }
   }
+
   appendChildren(el, children);
   return el;
 }
 
-function appendChildren(parent: HTMLElement, kids: Child[]): void {
-  for (const child of kids) {
+
+/**
+ * Append children recursively to a parent element.
+ * Supports signals, arrays, numbers, strings, and DOM nodes.
+ */
+function appendChildren(parent: HTMLElement | DocumentFragment, kids: Child[]): void {
+  // @ts-ignore
+  for (const child of kids.flat(Infinity)) {
     if (child == null || (child as any) === false) continue;
+
     if (Array.isArray(child)) {
       appendChildren(parent, child);
       continue;
     }
-    if (typeof child === "function" && (child as any).subscribe) {
-      parent.append(bindText(child as any));
+
+    if (isSignal(child)) {
+      parent.append(bindText(child));
       continue;
     }
+
     if (typeof child === "string" || typeof child === "number") {
       parent.append(document.createTextNode(String(child)));
       continue;
     }
-    if (child instanceof Node) parent.append(child);
+
+    if (child instanceof Node) {
+      parent.append(child);
+    }
   }
 }
 
+/**
+ * Creates a text node bound to a signal (reactive text binding).
+ */
 export function bindText(sig: Signal<any>): Text {
-  if (typeof sig !== "function" || typeof sig.subscribe !== "function")
-    return document.createTextNode(String(sig));
+  if (!isSignal(sig)) return document.createTextNode(String(sig));
   const node = document.createTextNode(String(sig()));
   sig.subscribe(() => (node.nodeValue = String(sig())));
   return node;
@@ -135,7 +166,7 @@ export function createApp({ routes }: { routes: any[] }) {
               return "([^/]+)";
             })
             .replace(/\//g, "\\/") +
-          "$",
+          "$"
       );
       const m = url.match(re);
       if (m) {

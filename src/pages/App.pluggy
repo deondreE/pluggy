@@ -13,6 +13,7 @@ import {
     createApp,
 } from "/src/runtime";
 import { Button } from "../components/btn.pluggy";
+import { Card } from "../components/card.pluggy";
 
 
 export function App() {
@@ -72,6 +73,11 @@ export function App() {
     todos.set(todos().filter((t) => t.id !== id));
   };
 
+    console.log(Card.toString());
+  const el = Card({ title: "Debug", content: "Visible?" });
+  console.log(el);
+  document.body.append(el)
+
   return (
     <div class="app" style="font-family:sans-serif; padding:1rem;">
       <h1 style="margin-bottom:0.5rem;">Pluggy Demo</h1>
@@ -109,6 +115,8 @@ export function App() {
         <h2>Pokémon Resource</h2>
         <p>{data}</p>
       </section>
+
+      <Card title="Test" content="Testing content" />
 
       <div style="font-family:sans-serif; padding:1rem;">
         <h1>Todo List ({todoCount})</h1>

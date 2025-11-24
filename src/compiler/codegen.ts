@@ -44,15 +44,26 @@ export function generate(nodes: Node[]): string {
       }
 
       case "Element": {
-        const props = buildProps(n.attrs || {});
-        const children = n.children.map(gen).filter(Boolean).join(", ");
-        const hasChildren = children.length > 0;
+        const propsExpr = buildProps(n.attrs || {});
+        const childExprs = n.children.map(gen).filter(Boolean);
+        const hasChildren = childExprs.length > 0;
+
         const first = n.tag.charCodeAt(0);
         const isComponent = first >= 65 && first <= 90;
-        const tagExpr = isComponent ? n.tag : JSON.stringify(n.tag);
+
+        if (isComponent) {
+          // Function component: emit direct call
+          if (hasChildren) {
+            // merge children into props
+            return `${n.tag}({ ...${propsExpr}, children:[${childExprs.join(", ")}] })`;
+          }
+          return `${n.tag}(${propsExpr})`;
+        }
+
+        const tagExpr = JSON.stringify(n.tag);
         return hasChildren
-          ? `h(${tagExpr}, ${props}, ${children})`
-          : `h(${tagExpr}, ${props})`;
+          ? `h(${tagExpr}, ${propsExpr}, ${childExprs.join(", ")})`
+          : `h(${tagExpr}, ${propsExpr})`;
       }
 
       default:
