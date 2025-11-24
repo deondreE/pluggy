@@ -73,10 +73,6 @@ export function App() {
     todos.set(todos().filter((t) => t.id !== id));
   };
 
-    console.log(Card.toString());
-  const el = Card({ title: "Debug", content: "Visible?" });
-  console.log(el);
-  document.body.append(el)
 
   return (
     <div class="app" style="font-family:sans-serif; padding:1rem;">

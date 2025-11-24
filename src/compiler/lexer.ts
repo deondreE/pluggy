@@ -4,6 +4,7 @@ export interface Token {
     | "tagClose"
     | "attrName"
     | "attrValue"
+    | "attrValueExpr"
     | "exprOpen"
     | "exprClose"
     | "text"
@@ -12,11 +13,6 @@ export interface Token {
   value?: string;
 }
 
-/**
- * Robust JSX‑like tokenizer for Pluggy.
- * ✔ Handles nested {expr}, self‑closing tags, quoted or bare attributes
- * ✔ Correctly tokenizes boolean attrs and avoids duplicates
- */
 export function tokenize(src: string): Token[] {
   const out: Token[] = [];
   const len = src.length;
@@ -36,7 +32,7 @@ export function tokenize(src: string): Token[] {
   while (i < len) {
     const ch = peek();
 
-    /* ----- { curly expressions } ----- */
+    /* ----- { ...expression... } blocks in content ----- */
     if (ch === "{") {
       out.push({ type: "exprOpen" });
       braceDepth++;
@@ -51,7 +47,7 @@ export function tokenize(src: string): Token[] {
       continue;
     }
 
-    /* ----- closing tag </div> ----- */
+    /* ----- closing tag: </div> ----- */
     if (ch === "<" && src[i + 1] === "/") {
       i += 2;
       const name = readWhile(/[A-Za-z0-9:_-]/);
@@ -61,15 +57,13 @@ export function tokenize(src: string): Token[] {
       continue;
     }
 
-    /* ----- opening tag <div> / <Comp> ----- */
+    /* ----- opening tag: <div>, <Comp> ----- */
     if (ch === "<" && nextIsAlpha()) {
-      eat(); // eat '<'
+      eat(); // '<'
       const tag = readWhile(/[A-Za-z0-9:_-]/);
       out.push({ type: "tagOpen", name: tag });
-
-      // parse attributes (until > or />)
+      
       while (i < len) {
-        // skip whitespace
         while (i < len && /\s/.test(peek()!)) eat();
         const c = peek();
         if (!c || c === ">" || c === "/") break;
@@ -82,11 +76,9 @@ export function tokenize(src: string): Token[] {
 
         let val: string | null = null;
 
-        // assignment
         if (peek() === "=") {
           eat(); // '='
 
-          // quoted value
           if (peek() === '"' || peek() === "'") {
             const quote = peek();
             eat();
@@ -99,9 +91,8 @@ export function tokenize(src: string): Token[] {
             continue;
           }
 
-          // braced expression value
           if (peek() === "{") {
-            eat(); // eat '{'
+            eat(); // '{'
             let depth = 1;
             const start = i;
             while (i < len && depth > 0) {
@@ -112,12 +103,12 @@ export function tokenize(src: string): Token[] {
             }
             const valExpr = src.slice(start, i - 1).trim();
             out.push({ type: "attrName", name: attrName });
-            out.push({ type: "attrValue", value: valExpr });
-            if (peek() === "}") eat(); // consume closing brace
+            out.push({ type: "attrValueExpr", value: valExpr });
+            if (peek() === "}") eat(); 
             continue;
           }
 
-          // bareword
+          // bareword value (e.g. disabled=true)
           const start = i;
           while (i < len && /[^\s>]/.test(peek()!)) eat();
           val = src.slice(start, i);
@@ -126,16 +117,13 @@ export function tokenize(src: string): Token[] {
           continue;
         }
 
-        // boolean attribute (no value)
         out.push({ type: "attrName", name: attrName });
       }
 
-      // self‑closing tag
       while (i < len && /\s/.test(peek()!)) eat();
       if (peek() === "/") {
         eat();
         if (peek() === ">") eat();
-        // emit closing mirror for self‑closing
         out.push({ type: "tagClose", name: tag });
         continue;
       }

@@ -1,5 +1,8 @@
 import type { Token } from "./lexer";
 
+/**
+ * AST node types used throughout the Pluggy compiler.
+ */
 export type Node =
   | {
       type: "Element";
@@ -12,15 +15,17 @@ export type Node =
 
 /**
  * Proper recursive‑descent parser for Pluggy JSX‑like tokens.
+ * Handles nested elements, inline expressions, and attribute expressions.
  */
 export function parse(tokens: Token[]): Node[] {
   let i = 0;
+
   const peek = () => tokens[i];
   const eat = () => tokens[i++];
 
   return parseNodes();
 
-  // --- main node list parser ---
+  // Main node list parser
   function parseNodes(stopTag?: string): Node[] {
     const nodes: Node[] = [];
 
@@ -28,14 +33,14 @@ export function parse(tokens: Token[]): Node[] {
       const t = peek();
       if (!t || t.type === "eof") break;
 
-      // closing tag
+      // closing tag (</div>)
       if (t.type === "tagClose") {
         eat();
         if (t.name === stopTag) break;
         continue;
       }
 
-      // element open
+      // opening tag (<div> or <Comp>)
       if (t.type === "tagOpen") {
         nodes.push(parseElement());
         continue;
@@ -48,14 +53,15 @@ export function parse(tokens: Token[]): Node[] {
         continue;
       }
 
-      // { expr }
+      // { expression }
       if (t.type === "exprOpen") {
         eat();
         nodes.push(parseExpression());
         continue;
       }
 
-      eat(); // ignore everything else
+      // otherwise skip unknown token
+      eat();
     }
 
     return nodes;
@@ -72,9 +78,11 @@ export function parse(tokens: Token[]): Node[] {
 
       if (t.type === "exprOpen") {
         depth++;
-        code += eat().value ?? "{";
+        code += "{";
+        eat();
         continue;
       }
+
       if (t.type === "exprClose") {
         depth--;
         eat();
@@ -83,6 +91,7 @@ export function parse(tokens: Token[]): Node[] {
         continue;
       }
 
+      // nested element inside expression
       if (t.type === "tagOpen") {
         const node = parseElement();
         code += inline(node);
@@ -96,10 +105,11 @@ export function parse(tokens: Token[]): Node[] {
     return { type: "Expression", code: code.trim() };
   }
 
+  // --- inline helper: for converting inline JSX inside { } into h() calls ---
   function inline(n: Node): string {
     if (n.type === "Text") return JSON.stringify(n.value);
-    if (n.type == "Expression") return `(${n.code})`;
-    if (n.type == "Element") {
+    if (n.type === "Expression") return `(${n.code})`;
+    if (n.type === "Element") {
       const props = buildInlineProps(n.attrs);
       const children = n.children.map(inline).filter(Boolean).join(", ");
       const tag = /^[A-Z]/.test(n.tag) ? n.tag : `"${n.tag}"`;
@@ -107,40 +117,57 @@ export function parse(tokens: Token[]): Node[] {
         ? `h(${tag}, ${props}, ${children})`
         : `h(${tag}, ${props})`;
     }
+    return "";
   }
 
+  // --- used internally to build props objects for inline nodes ---
   function buildInlineProps(attrs: Record<string, string | null>): string {
     const out: string[] = [];
-    for (const [k, v] of Object.entries(attrs)) {
-      if (v === null || v == "") {
-        out.push(`"${k}":null`);
+    for (const [key, valRaw] of Object.entries(attrs)) {
+      const val = valRaw ?? null;
+      if (val === null || val === "") {
+        out.push(`"${key}":null`);
         continue;
       }
-      out.push(`"${k}":${JSON.stringify(v)}`);
+
+      const first = val.charCodeAt(0);
+      const last = val.charCodeAt(val.length - 1);
+
+      // {expr} → inline expression
+      if (first === 123 && last === 125 && val.length > 1) {
+        out.push(`"${key}":${val.slice(1, -1).trim()}`);
+      } else {
+        out.push(`"${key}":${JSON.stringify(val)}`);
+      }
     }
     return `{${out.join(",")}}`;
   }
 
   // --- <tag ...attrs ...>children</tag> ---
   function parseElement(): Node {
-    const open = eat()!;
+    const open = eat()!; // tagOpen
     const tag = open.name!;
     const attrs: Record<string, string | null> = {};
 
-    // collect attributes
+    // Collect attributes
     while (i < tokens.length) {
       const t = peek();
       if (!t) break;
 
+      // Attribute name
       if (t.type === "attrName") {
         const attrName = eat()!.name!;
         let val: string | null = null;
 
-        const n1 = peek();
-        if (n1?.type === "attrValue") {
+        const next = peek();
+
+        if (next?.type === "attrValue") {
+          // quoted or bare value
           val = eat()!.value ?? null;
-        } else if (n1?.type === "exprOpen") {
-          eat(); // {
+        } else if (next?.type === "attrValueExpr") {
+          val = `{${eat()!.value ?? ""}}`;
+        } else if (next?.type === "exprOpen") {
+          eat(); // consume '{'
           const exprParts: string[] = [];
           let depth = 1;
           while (i < tokens.length && depth > 0) {
@@ -152,16 +179,16 @@ export function parse(tokens: Token[]): Node[] {
               eat();
               break;
             }
-            exprParts.push(eat().value ?? tt.name ?? "");
+            exprParts.push(eat()?.value ?? tt.name ?? "");
           }
-          val = exprParts.join("").trim();
+          val = `{${exprParts.join("").trim()}}`;
         }
 
         attrs[attrName] = val;
         continue;
       }
 
-      // reached tag end or next element
+      // reached tag end or nested node
       if (
         t.type === "tagClose" ||
         t.type === "text" ||
@@ -170,18 +197,19 @@ export function parse(tokens: Token[]): Node[] {
       )
         break;
 
-      // self‑closing slash
+      // @ts-ignore
       if (t.type === "slash") {
         eat();
         const t2 = peek();
+        // @ts-ignore
         if (t2?.type === "tagEnd") eat();
         return { type: "Element", tag, attrs, children: [] };
       }
 
-      eat();
+      eat(); // skip whitespace or unexpected token
     }
 
-    // parse children if not self‑closing
+    // Parse children (if not self‑closing)
     const children = parseNodes(tag);
     return { type: "Element", tag, attrs, children };
   }

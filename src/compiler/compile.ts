@@ -79,7 +79,6 @@ export function compile(
 
     let output = out
       .replace(/;;+/g, ";")
-      .replace(/([)])(})/g, "$1;$2")
       .replace(/;(\s*if\s*\()/g, "$1")
       .trim();
 
